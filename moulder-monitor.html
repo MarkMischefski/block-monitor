@@ -113,8 +113,8 @@ main { padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 20px
 .section-head { font-family: var(--ff-head); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 
 /* ── recipe grid ── */
-#recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.recipe-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+#recipe-grid { display: flex; flex-wrap: nowrap; gap: 12px; overflow-x: auto; }
+.recipe-card { flex: 1 1 0; min-width: 200px; max-width: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .recipe-card.alert-high { border-color: rgba(220,38,38,.5); }
 .recipe-card.alert-low  { border-color: rgba(232,146,10,.5); }
 
