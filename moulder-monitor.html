@@ -1,0 +1,1171 @@
+<title>Block Moulder Monitor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+:root {
+  --bg:        #f2f3f5;
+  --surface:   #ffffff;
+  --border:    #e0e3ea;
+  --fg:        #1a1d24;
+  --muted:     #717585;
+  --accent:    #0085ff;
+  --amber:     #e8920a;
+  --good:      #16a34a;
+  --warn:      #e8920a;
+  --danger:    #dc2626;
+  --ff-head:   'Barlow Condensed', system-ui, sans-serif;
+  --ff-body:   'Barlow', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:      #11131a;
+    --surface: #1b1e28;
+    --border:  #272b38;
+    --fg:      #e4e6f0;
+    --muted:   #6b6f85;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:      #11131a; --surface: #1b1e28; --border:  #272b38;
+  --fg:      #e4e6f0; --muted:   #6b6f85; color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+body { font-family: var(--ff-body); background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.5; }
+
+/* ── header ── */
+header {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px; padding: 0 20px; height: 50px;
+}
+.logo { font-family: var(--ff-head); font-size: 17px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex-shrink: 0; }
+.pulse.live { animation: blink 2s ease-in-out infinite; }
+.pulse.err  { background: #ef4444; animation: none; }
+.pulse.idle { background: var(--muted); animation: none; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:.3} }
+.header-mid { flex: 1; min-width: 0; }
+.header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.ts { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.btn { font-family: var(--ff-body); font-size: 12px; font-weight: 600; padding: 5px 13px; border-radius: 5px; border: none; cursor: pointer; background: var(--accent); color: #fff; transition: opacity .15s; white-space: nowrap; }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--fg); }
+.btn-ghost:hover { background: var(--border); opacity: 1; }
+.btn-sm { font-size: 11px; padding: 3px 9px; }
+.btn-danger { background: var(--danger); }
+
+/* ── tabs ── */
+#tab-bar {
+  display: flex; gap: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+}
+.tab {
+  font-family: var(--ff-head); font-size: 13px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  padding: 10px 16px; cursor: pointer; border: none; background: none; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .15s;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover:not(.active) { color: var(--fg); }
+
+/* ── config drawer ── */
+#cfg {
+  background: var(--bg); border-bottom: 1px solid var(--border);
+  padding: 6px 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+#cfg label { font-size: 10px; color: var(--muted); margin-right: 4px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+#cfg .cfg-field { display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 280px; }
+#cfg .cfg-field:first-child { max-width: 240px; }
+#cfg input { font-family: var(--ff-body); font-size: 11px; background: var(--surface); border: 1px solid var(--border); color: var(--fg); border-radius: 4px; padding: 3px 7px; width: 100%; outline: none; }
+#cfg input:focus { border-color: var(--accent); }
+
+/* ── week nav ── */
+#date-nav {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.date-label { font-family: var(--ff-head); font-size: 18px; font-weight: 700; letter-spacing: .01em; flex: 1; min-width: 0; }
+.nav-btn { background: var(--bg); border: 1px solid var(--border); color: var(--fg); border-radius: 5px; padding: 4px 10px; font-size: 16px; cursor: pointer; line-height: 1; transition: background .12s; }
+.nav-btn:hover { background: var(--border); }
+.nav-btn:disabled { opacity: .3; cursor: default; }
+
+/* ── error bar ── */
+#err { margin: 12px 20px 0; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #ef4444; border-radius: 6px; padding: 9px 14px; font-size: 13px; display: none; }
+
+/* ── main content pages ── */
+.page { display: none; }
+.page.active { display: block; }
+main { padding: 16px 20px 32px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ── summary strip ── */
+.summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.stat-value { font-family: var(--ff-head); font-size: 32px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin: 3px 0 1px; }
+.stat-sub { font-size: 11px; color: var(--muted); }
+.stat-alert { color: var(--danger); }
+
+/* ── section head ── */
+.section-head { font-family: var(--ff-head); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+/* ── recipe grid ── */
+#recipe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.recipe-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.recipe-card.alert-high { border-color: rgba(220,38,38,.5); }
+.recipe-card.alert-low  { border-color: rgba(232,146,10,.5); }
+
+/* ── current run card ── */
+.recipe-card.current-run {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 16px rgba(0,133,255,.15);
+}
+.current-run .recipe-card-head {
+  background: rgba(0,133,255,.07);
+  border-bottom-color: rgba(0,133,255,.2);
+}
+.now-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 4px;
+}
+.now-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+  animation: blink 1.4s ease-in-out infinite;
+}
+.last-block-strip {
+  display: flex; gap: 0;
+  background: rgba(0,133,255,.05);
+  border-top: 1px solid rgba(0,133,255,.15);
+  font-size: 11px;
+}
+.last-block-item { flex: 1; padding: 6px 14px; border-right: 1px solid rgba(0,133,255,.15); }
+.last-block-item:last-child { border-right: none; }
+.last-block-label { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.last-block-val { font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; color: var(--accent); }
+.last-block-val.density-val.ok   { color: var(--good); }
+.last-block-val.density-val.low  { color: var(--warn); }
+.last-block-val.density-val.high { color: var(--danger); }
+.recipe-card-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 10px; border-bottom: 1px solid var(--border); }
+.recipe-name { font-family: var(--ff-head); font-size: 15px; font-weight: 700; letter-spacing: .01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recipe-grade-chip { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; background: rgba(0,133,255,.1); color: var(--accent); letter-spacing: .04em; text-transform: uppercase; flex-shrink: 0; margin-left: 6px; }
+.recipe-count { font-family: var(--ff-head); font-size: 22px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; flex-shrink: 0; margin-left: 10px; }
+.recipe-body { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* density meter */
+.density-row { display: flex; align-items: center; gap: 10px; }
+.density-label { font-size: 11px; color: var(--muted); width: 70px; flex-shrink: 0; }
+.meter-wrap { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; position: relative; }
+.meter-fill { height: 100%; border-radius: 3px; background: var(--amber); transition: width .4s; }
+.meter-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--fg); opacity: .3; border-radius: 1px; }
+.density-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; width: 62px; text-align: right; flex-shrink: 0; }
+.density-val.ok   { color: var(--good); }
+.density-val.low  { color: var(--warn); }
+.density-val.high { color: var(--danger); }
+
+/* density alert pill */
+.alert-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: .04em; }
+.alert-pill.high { background: rgba(220,38,38,.12); color: var(--danger); }
+.alert-pill.low  { background: rgba(232,146,10,.12); color: var(--warn); }
+
+/* sparkline */
+.spark-wrap { height: 36px; }
+.spark-wrap.spark-lg { height: 52px; }
+svg.spark { width: 100%; height: 100%; overflow: visible; }
+
+/* recipe footer stats */
+.recipe-stats { display: flex; gap: 0; border-top: 1px solid var(--border); margin-top: 2px; }
+.recipe-stat { flex: 1; padding: 8px 14px; border-right: 1px solid var(--border); }
+.recipe-stat:last-child { border-right: none; }
+.recipe-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.recipe-stat-val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+/* ── panel / table ── */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.panel-title { font-family: var(--ff-head); font-size: 14px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: left; padding: 8px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); background: var(--bg); border-bottom: 1px solid var(--border); white-space: nowrap; font-weight: 600; }
+td { padding: 8px 14px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(0,133,255,.04); }
+tr.row-high td { background: rgba(220,38,38,.04); }
+tr.row-low  td { background: rgba(232,146,10,.04); }
+/* ── grade colour palette ── */
+/* SL=yellow, S=brown, M=black, H=green, VH=red, SLABX=purple, PLATINUM=grey */
+:root {
+  --gc-sl:       #b38600;
+  --gc-sl-bg:    rgba(255,214,0,.13);
+  --gc-s:        #7a4f1d;
+  --gc-s-bg:     rgba(139,83,30,.13);
+  --gc-m:        #1a1d24;
+  --gc-m-bg:     rgba(40,40,40,.12);
+  --gc-h:        #166534;
+  --gc-h-bg:     rgba(22,163,74,.13);
+  --gc-vh:       #b91c1c;
+  --gc-vh-bg:    rgba(220,38,38,.13);
+  --gc-slabx:    #6d28d9;
+  --gc-slabx-bg: rgba(109,40,217,.13);
+  --gc-plat:     #4b5563;
+  --gc-plat-bg:  rgba(107,114,128,.13);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --gc-sl:       #fcd34d;  --gc-sl-bg:    rgba(252,211,77,.15);
+  --gc-s:        #d97706;  --gc-s-bg:     rgba(217,119,6,.15);
+  --gc-m:        #d1d5db;  --gc-m-bg:     rgba(180,180,180,.12);
+  --gc-h:        #4ade80;  --gc-h-bg:     rgba(74,222,128,.13);
+  --gc-vh:       #f87171;  --gc-vh-bg:    rgba(248,113,113,.13);
+  --gc-slabx:    #a78bfa;  --gc-slabx-bg: rgba(167,139,250,.15);
+  --gc-plat:     #9ca3af;  --gc-plat-bg:  rgba(156,163,175,.13);
+}}
+:root[data-theme="dark"] {
+  --gc-sl:       #fcd34d;  --gc-sl-bg:    rgba(252,211,77,.15);
+  --gc-s:        #d97706;  --gc-s-bg:     rgba(217,119,6,.15);
+  --gc-m:        #d1d5db;  --gc-m-bg:     rgba(180,180,180,.12);
+  --gc-h:        #4ade80;  --gc-h-bg:     rgba(74,222,128,.13);
+  --gc-vh:       #f87171;  --gc-vh-bg:    rgba(248,113,113,.13);
+  --gc-slabx:    #a78bfa;  --gc-slabx-bg: rgba(167,139,250,.15);
+  --gc-plat:     #9ca3af;  --gc-plat-bg:  rgba(156,163,175,.13);
+}
+
+.chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; background: rgba(0,133,255,.12); color: var(--accent); letter-spacing: .03em; text-transform: uppercase; }
+/* grade-coloured chip variant */
+.chip-grade { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; letter-spacing: .03em; text-transform: uppercase; }
+.chip-sl     { background: var(--gc-sl-bg);    color: var(--gc-sl); }
+.chip-s      { background: var(--gc-s-bg);     color: var(--gc-s); }
+.chip-m      { background: var(--gc-m-bg);     color: var(--gc-m); }
+.chip-h      { background: var(--gc-h-bg);     color: var(--gc-h); }
+.chip-vh     { background: var(--gc-vh-bg);    color: var(--gc-vh); }
+.chip-slabx  { background: var(--gc-slabx-bg); color: var(--gc-slabx); }
+.chip-plat   { background: var(--gc-plat-bg);  color: var(--gc-plat); }
+.badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; letter-spacing: .03em; }
+.badge-ok   { background: rgba(22,163,74,.12);  color: var(--good); }
+.badge-high { background: rgba(220,38,38,.12);  color: var(--danger); }
+.badge-low  { background: rgba(232,146,10,.12); color: var(--warn); }
+.label-chip { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 3px; letter-spacing: .03em; white-space: nowrap; }
+.label-ok   { background: rgba(22,163,74,.12);  color: var(--good); }
+.label-down { background: rgba(232,146,10,.12); color: var(--warn); }
+.label-up   { background: rgba(0,133,255,.12);  color: var(--accent); }
+
+/* ── mapping admin page ── */
+#map-page { padding: 12px 20px 40px; }
+.map-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.map-toolbar h2 { font-family: var(--ff-head); font-size: 16px; font-weight: 700; letter-spacing: .02em; flex: 1; }
+.map-grid { display: grid; gap: 4px; }
+.map-card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+/* single compact row */
+.map-row {
+  display: grid;
+  grid-template-columns: 90px 110px 1fr 90px 80px auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+@media (max-width: 700px) { .map-row { grid-template-columns: 80px 1fr 80px 70px auto; } }
+.map-erp  { font-family: var(--ff-head); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.map-name { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.map-field input, .map-field textarea {
+  font-family: var(--ff-body); font-size: 12px;
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--fg); border-radius: 4px; padding: 4px 7px;
+  width: 100%; outline: none; resize: none;
+}
+.map-field input:focus, .map-field textarea:focus { border-color: var(--accent); background: var(--surface); }
+.map-field-label { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 2px; }
+.map-status { font-size: 10px; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+.map-status.saved { background: rgba(22,163,74,.12); color: var(--good); }
+.map-status.error { background: rgba(220,38,38,.12); color: var(--danger); }
+
+/* ── kpi mini bars ── */
+.stat-bars { margin-top: 8px; display: flex; align-items: flex-end; gap: 3px; height: 28px; }
+.stat-bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+.stat-bar-fill { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .5; transition: height .3s; min-height: 2px; }
+.stat-bar-fill.current { opacity: 1; }
+.stat-bar-lbl { font-size: 8px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── spinner / empty ── */
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-cell { padding: 40px 14px; text-align: center; }
+.empty { padding: 40px 14px; text-align: center; color: var(--muted); font-size: 13px; }
+</style>
+
+<!-- CONFIG DRAWER -->
+<div id="cfg">
+  <div class="cfg-field">
+    <label for="i-url">URL</label>
+    <input id="i-url" type="text" placeholder="https://your-project.supabase.co" spellcheck="false">
+  </div>
+  <div class="cfg-field">
+    <label for="i-key">Anon Key</label>
+    <input id="i-key" type="password" placeholder="eyJ…">
+  </div>
+  <button class="btn btn-sm" id="btn-connect">Connect</button>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="pulse idle" id="dot"></div>
+    Moulder Monitor
+  </div>
+  <div class="header-mid"></div>
+  <div class="header-right">
+    <span class="ts" id="ts"></span>
+    <button class="btn btn-ghost" id="btn-cfg">Settings</button>
+    <button class="btn" id="btn-refresh" disabled>Refresh</button>
+  </div>
+</header>
+
+<!-- TABS -->
+<div id="tab-bar">
+  <button class="tab active" data-tab="dashboard">Production</button>
+  <button class="tab" data-tab="mapping">Grade Mapping</button>
+</div>
+
+<!-- ═══════════════════════════ PRODUCTION PAGE ══════════════════════════════ -->
+<div id="dashboard-page" class="page active">
+
+  <!-- WEEK NAV -->
+  <div id="date-nav">
+    <button class="nav-btn" id="btn-prev">‹</button>
+    <button class="nav-btn" id="btn-next" disabled>›</button>
+    <span class="date-label" id="date-label">—</span>
+  </div>
+
+  <div id="err"></div>
+
+  <main>
+    <!-- summary strip -->
+    <div class="summary-strip">
+      <div class="stat">
+        <div class="stat-label">Total Blocks</div>
+        <div class="stat-value" id="s-total">—</div>
+        <div class="stat-sub">7 days</div>
+        <div class="stat-bars" id="sb-total"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Recipes Run</div>
+        <div class="stat-value" id="s-recipes">—</div>
+        <div class="stat-sub">distinct grades</div>
+        <div class="stat-bars" id="sb-recipes"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Total Material</div>
+        <div class="stat-value" id="s-density">—</div>
+        <div class="stat-sub">kg produced</div>
+        <div class="stat-bars" id="sb-density"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Hours Running</div>
+        <div class="stat-value" id="s-cycle">—</div>
+        <div class="stat-sub">machine time</div>
+        <div class="stat-bars" id="sb-cycle"></div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Off-Spec Blocks</div>
+        <div class="stat-value stat-alert" id="s-offspec">—</div>
+        <div class="stat-sub">density outside ±1 kg/m³</div>
+        <div class="stat-bars" id="sb-offspec"></div>
+      </div>
+    </div>
+
+    <!-- recipe section -->
+    <div>
+      <div class="section-head">By Recipe — 7-Day Totals</div>
+      <div style="height:12px"></div>
+      <div id="recipe-grid"><div class="loading-cell"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- recent blocks -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Recent Blocks</span>
+        <span class="ts">latest 50 — highlighted if off-spec</span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Date / Time (NZ)</th>
+            <th>Recipe</th>
+            <th>Label as</th>
+            <th>ERP Grade</th>
+            <th>Density kg/m³</th>
+            <th>Target</th>
+            <th>Status</th>
+            <th>Weight kg</th>
+            <th>Cycle min</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="9" class="loading-cell"><div class="spinner"></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═════════════════════════ GRADE MAPPING PAGE ════════════════════════════ -->
+<div id="mapping-page" class="page">
+  <div id="map-page">
+    <div class="map-toolbar">
+      <h2>Grade Mapping</h2>
+      <button class="btn btn-ghost btn-sm" id="btn-map-refresh">↻ Reload</button>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;max-width:680px">
+      Map each ERP grade to one or more moulder recipe names. Enter recipe names exactly as they appear in the .DAT file, comma-separated. Set a target density and the dashboard will highlight blocks outside the ±tolerance band.
+    </p>
+    <div class="map-grid" id="map-grid">
+      <div class="loading-cell"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── state ─────────────────────────────────────────────────────────────────────
+let SB_URL = '', SB_KEY = '';
+let viewEndDate = todayNZ();
+let gradeMap = {};   // recipe → { erp_grade, display_name, target_density, density_tolerance }
+let autoTick;
+
+const ls = {
+  get: k => { try { return localStorage.getItem(k) } catch(_){ return null } },
+  set: (k,v) => { try { localStorage.setItem(k,v) } catch(_){} }
+};
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const $cfg    = document.getElementById('cfg');
+const $iUrl   = document.getElementById('i-url');
+const $iKey   = document.getElementById('i-key');
+const $dot    = document.getElementById('dot');
+const $ts     = document.getElementById('ts');
+const $err    = document.getElementById('err');
+const $btnCfg = document.getElementById('btn-cfg');
+const $btnCon = document.getElementById('btn-connect');
+const $btnRef = document.getElementById('btn-refresh');
+const $btnPrv = document.getElementById('btn-prev');
+const $btnNxt = document.getElementById('btn-next');
+const $dlbl   = document.getElementById('date-label');
+
+// restore creds
+const su = ls.get('sb_url'), sk = ls.get('sb_key');
+if (su) $iUrl.value = su;
+if (sk) $iKey.value = sk;
+if (su && sk) { $cfg.hidden = true; }
+
+$btnCfg.addEventListener('click', () => { $cfg.hidden = !$cfg.hidden; });
+$btnCon.addEventListener('click', connect);
+$btnRef.addEventListener('click', () => loadDashboard());
+$btnPrv.addEventListener('click', () => { shiftWeek(-7); loadDashboard(); loadWeeklyBars(); });
+$btnNxt.addEventListener('click', () => { shiftWeek(+7); loadDashboard(); loadWeeklyBars(); });
+
+// ── tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.tab + '-page').classList.add('active');
+  if (t.dataset.tab === 'mapping' && SB_URL) loadMapping();
+}));
+document.getElementById('btn-map-refresh').addEventListener('click', loadMapping);
+
+// ── date helpers ──────────────────────────────────────────────────────────────
+function todayNZ() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+}
+function shiftWeek(days) {
+  const dt = new Date(viewEndDate + 'T12:00:00Z');
+  dt.setUTCDate(dt.getUTCDate() + days);
+  viewEndDate = dt.toISOString().slice(0, 10);
+  $btnNxt.disabled = viewEndDate >= todayNZ();
+}
+function windowStart(endDate) {
+  const dt = new Date(endDate + 'T12:00:00Z');
+  dt.setUTCDate(dt.getUTCDate() - 6);
+  return dt.toISOString().slice(0, 10);
+}
+function fmtWeekLabel(s, e) {
+  const f = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', day: 'numeric', month: 'short' });
+  const fl = d => new Date(d + 'T12:00:00Z').toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', day: 'numeric', month: 'short', year: 'numeric' });
+  const tag = e === todayNZ() ? ' — This Week' : '';
+  return `${f(s)} – ${fl(e)}${tag}`;
+}
+function nzDayStartUTC(d) { return new Date(d + 'T00:00:00+12:00').toISOString(); }
+
+// ── REST helper ───────────────────────────────────────────────────────────────
+async function sbFetch(path, params = {}) {
+  const url = new URL(`${SB_URL}/rest/v1/${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (Array.isArray(v)) v.forEach(vi => url.searchParams.append(k, vi));
+    else url.searchParams.set(k, v);
+  }
+  const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  return r.json();
+}
+
+async function sbPatch(path, id, body) {
+  const url = new URL(`${SB_URL}/rest/v1/${path}`);
+  url.searchParams.set('id', `eq.${id}`);
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
+// ── connect ───────────────────────────────────────────────────────────────────
+function connect() {
+  SB_URL = $iUrl.value.trim().replace(/\/$/, '');
+  SB_KEY = $iKey.value.trim();
+  if (!SB_URL || !SB_KEY) { showErr('Enter the Supabase URL and anon key.'); return; }
+  ls.set('sb_url', SB_URL); ls.set('sb_key', SB_KEY);
+  $cfg.hidden = true;
+  clearErr();
+  loadAll();
+  clearInterval(autoTick);
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
+}
+
+if (su && sk) {
+  SB_URL = su; SB_KEY = sk;
+  loadAll();
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
+}
+
+async function loadAll() {
+  await loadGradeMap();
+  loadDashboard();
+  loadWeeklyBars();
+}
+
+// ── 4-week KPI bar charts ─────────────────────────────────────────────────────
+async function loadWeeklyBars() {
+  // Build 4 week windows ending on viewEndDate
+  const weeks = [];
+  for (let i = 3; i >= 0; i--) {
+    const end = new Date(viewEndDate + 'T12:00:00Z');
+    end.setUTCDate(end.getUTCDate() - i * 7);
+    const endStr = end.toISOString().slice(0, 10);
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - 6);
+    const startStr = start.toISOString().slice(0, 10);
+    weeks.push({ label: `W${4 - i}`, start: startStr, end: endStr, current: i === 0 });
+  }
+
+  // Fetch all daily rows for the 4-week span in one call
+  const url = new URL(`${SB_URL}/rest/v1/block_moulder_daily`);
+  url.searchParams.append('production_date', `gte.${weeks[0].start}`);
+  url.searchParams.append('production_date', `lte.${weeks[3].end}`);
+  url.searchParams.set('select', 'production_date,blocks_produced,avg_density,avg_weight_kg,avg_cycle_s,recipe');
+  url.searchParams.set('limit', '2000');
+  const rows = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } })
+    .then(r => r.ok ? r.json() : []).catch(() => []);
+
+  // Aggregate per week
+  const weekData = weeks.map(w => {
+    const wrows = rows.filter(r => r.production_date >= w.start && r.production_date <= w.end);
+    const blocks = wrows.reduce((s, r) => s + (+r.blocks_produced || 0), 0);
+    const recipes = new Set(wrows.map(r => r.recipe)).size;
+    const totalKg  = wrows.reduce((s, r) => s + (r.avg_weight_kg != null ? +r.avg_weight_kg * (+r.blocks_produced||0) : 0), 0);
+    const totalHrs = wrows.reduce((s, r) => s + (r.avg_cycle_s  != null ? +r.avg_cycle_s  * (+r.blocks_produced||0) : 0), 0) / 3600;
+    return { ...w, blocks, recipes, totalKg, totalHrs };
+  });
+
+  // Fetch off-spec counts per week from raw blocks (reuse already-loaded allBlocks? No — do a separate light fetch)
+  const rawUrl = new URL(`${SB_URL}/rest/v1/block_moulder_log`);
+  rawUrl.searchParams.set('select', 'produced_at,recipe,blk_density');
+  rawUrl.searchParams.set('produced_at', `gte.${nzDayStartUTC(weeks[0].start)}`);
+  rawUrl.searchParams.set('limit', '20000');
+  const rawBlocks = await fetch(rawUrl, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } })
+    .then(r => r.ok ? r.json() : []).catch(() => []);
+
+  weekData.forEach(w => {
+    const wStart = new Date(w.start + 'T00:00:00+12:00').getTime();
+    const wEnd   = new Date(w.end   + 'T23:59:59+12:00').getTime();
+    w.offspec = rawBlocks.filter(b => {
+      const t = new Date(b.produced_at).getTime();
+      if (t < wStart || t > wEnd) return false;
+      const g = gradeForRecipe(b.recipe);
+      const st = densityStatus(b.blk_density, g);
+      return st === 'high' || st === 'low';
+    }).length;
+  });
+
+  renderBars('sb-total',   weekData, w => w.blocks,    w => w.blocks,    v => v.toLocaleString());
+  renderBars('sb-recipes', weekData, w => w.recipes,   w => w.recipes,   v => v);
+  renderBars('sb-density', weekData, w => w.totalKg,   w => w.totalKg,   v => Math.round(v).toLocaleString() + ' kg');
+  renderBars('sb-cycle',   weekData, w => w.totalHrs,  w => w.totalHrs,  v => v.toFixed(1) + ' h');
+  renderBars('sb-offspec', weekData, w => w.offspec,   w => w.offspec,   v => v, true);
+}
+
+function renderBars(id, weeks, valFn, heightFn, fmtFn, danger = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const vals = weeks.map(w => heightFn(w) || 0);
+  const maxV = Math.max(...vals, 1);
+  const BAR_H = 24; // px max bar height
+  el.innerHTML = weeks.map(w => {
+    const v = heightFn(w) || 0;
+    const h = Math.max(2, Math.round((v / maxV) * BAR_H));
+    const cls = 'stat-bar-fill' + (w.current ? ' current' : '') + (danger && w.current && v > 0 ? ' danger' : '');
+    const tip = `${w.label}: ${fmtFn(valFn(w))}`;
+    return `<div class="stat-bar-col" title="${tip}">
+      <div class="stat-bar-fill ${w.current ? 'current' : ''}" style="height:${h}px${danger && v > 0 ? ';background:var(--danger)' : ''}"></div>
+      <div class="stat-bar-lbl">${w.label}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── grade map (cached) ────────────────────────────────────────────────────────
+async function loadGradeMap() {
+  try {
+    const rows = await sbFetch('recipe_grade_map', { select: 'erp_grade,display_name,recipes,target_density,density_tolerance', active: 'eq.true' });
+    gradeMap = {};
+    for (const r of rows) {
+      for (const recipe of (r.recipes || [])) {
+        gradeMap[recipe] = { erp_grade: r.erp_grade, display_name: r.display_name, target_density: r.target_density, tol: +r.density_tolerance };
+      }
+    }
+  } catch(e) {
+    // table may not exist yet — silently ignore, dashboard still works
+    gradeMap = {};
+  }
+}
+
+function gradeForRecipe(recipe) { return gradeMap[recipe] || null; }
+
+// Returns CSS class suffix for a grade's colour based on ERP grade code
+function gradeColorClass(erpGrade) {
+  if (!erpGrade) return '';
+  const g = erpGrade.toUpperCase();
+  if (g === 'PLATINUM')            return 'plat';
+  if (g.includes('SLABX') || g.includes('SLAB-X') || g.includes('SLAB X')) return 'slabx';
+  if (g.startsWith('VH'))         return 'vh';
+  if (g.startsWith('SL'))         return 'sl';
+  if (g.startsWith('H'))          return 'h';
+  if (g.startsWith('M'))          return 'm';
+  if (g.startsWith('S'))          return 's';
+  return '';
+}
+// Returns CSS var for a grade's foreground colour (for SVG etc.)
+function gradeColorVar(erpGrade) {
+  const cls = gradeColorClass(erpGrade);
+  if (!cls) return 'var(--accent)';
+  return `var(--gc-${cls})`;
+}
+
+function densityStatus(density, grade) {
+  if (!grade || grade.target_density == null || density == null) return 'unknown';
+  const diff = density - grade.target_density;
+  if (Math.abs(diff) <= grade.tol) return 'ok';
+  return diff > 0 ? 'high' : 'low';
+}
+
+// ── dashboard load ────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const startDate = windowStart(viewEndDate);
+  $dlbl.textContent = fmtWeekLabel(startDate, viewEndDate);
+  $btnNxt.disabled = viewEndDate >= todayNZ();
+
+  setDot('loading');
+  clearErr();
+  $btnRef.disabled = true;
+
+  try {
+    await Promise.all([loadRecipes(startDate), loadRecent(startDate)]);
+    setDot('ok');
+    $ts.textContent = 'Updated ' + new Date().toLocaleTimeString('en-NZ');
+  } catch (e) {
+    setDot('err');
+    showErr(e.message);
+  } finally {
+    $btnRef.disabled = false;
+  }
+}
+
+// ── recipe cards ──────────────────────────────────────────────────────────────
+async function loadRecipes(startDate) {
+  const url = new URL(`${SB_URL}/rest/v1/block_moulder_daily`);
+  url.searchParams.append('production_date', `gte.${startDate}`);
+  url.searchParams.append('production_date', `lte.${viewEndDate}`);
+  url.searchParams.set('select', 'recipe,blocks_produced,avg_density,avg_weight_kg,avg_cycle_s');
+  url.searchParams.set('order', 'recipe.asc');
+  url.searchParams.set('limit', '500');
+  const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0,200)}`);
+  const daily = await r.json();
+
+  // Aggregate per recipe across all days
+  const byRecipe = {};
+  for (const row of daily) {
+    if (!byRecipe[row.recipe]) byRecipe[row.recipe] = { blocks: 0, densitySum: 0, densityN: 0, weightSum: 0, weightN: 0, cycleSum: 0, cycleN: 0 };
+    const b = byRecipe[row.recipe];
+    b.blocks += (+row.blocks_produced || 0);
+    if (row.avg_density)  { b.densitySum += (+row.avg_density)  * (+row.blocks_produced||1); b.densityN += (+row.blocks_produced||1); }
+    if (row.avg_weight_kg){ b.weightSum  += (+row.avg_weight_kg)* (+row.blocks_produced||1); b.weightN  += (+row.blocks_produced||1); }
+    if (row.avg_cycle_s)  { b.cycleSum   += (+row.avg_cycle_s)  * (+row.blocks_produced||1); b.cycleN   += (+row.blocks_produced||1); }
+  }
+
+  const recipes = Object.entries(byRecipe).map(([recipe, b]) => ({
+    recipe,
+    blocks:      b.blocks,
+    avg_density: b.densityN ? b.densitySum / b.densityN : null,
+    avg_weight:  b.weightN  ? b.weightSum  / b.weightN  : null,
+    avg_cycle_s: b.cycleN   ? b.cycleSum   / b.cycleN   : null,
+  })).sort((a, b) => b.blocks - a.blocks);
+
+  const totalBlocks = recipes.reduce((s, r) => s + r.blocks, 0);
+  // Total kg = sum of (avg_weight × blocks) per recipe
+  const totalKg = recipes.reduce((s, r) => s + (r.avg_weight != null ? r.avg_weight * r.blocks : 0), 0);
+  // Total hours = sum of (avg_cycle_s × blocks) per recipe, converted to hours
+  const totalCycS = recipes.reduce((s, r) => s + (r.avg_cycle_s != null ? r.avg_cycle_s * r.blocks : 0), 0);
+  const totalHrs = totalCycS / 3600;
+
+  document.getElementById('s-total').textContent   = totalBlocks || '0';
+  document.getElementById('s-recipes').textContent = recipes.length || '0';
+  document.getElementById('s-density').textContent = totalKg > 0 ? Math.round(totalKg).toLocaleString() : '—';
+  document.getElementById('s-cycle').textContent   = totalHrs > 0 ? totalHrs.toFixed(1) : '—';
+
+  // Raw blocks — used for sparklines, off-spec count, and total kg
+  const winStartUTC = nzDayStartUTC(startDate);
+  const allBlocks = await fetch(
+    (() => {
+      const u = new URL(`${SB_URL}/rest/v1/block_moulder_log`);
+      u.searchParams.set('select', 'recipe,blk_density,blk_weight,produced_at');
+      u.searchParams.set('produced_at', `gte.${winStartUTC}`);
+      u.searchParams.set('order', 'produced_at.asc');
+      u.searchParams.set('limit', '5000');
+      return u;
+    })(),
+    { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } }
+  ).then(r => r.ok ? r.json() : []).catch(() => []);
+
+  const sparkMap = {};
+  for (const b of allBlocks) {
+    if (b.blk_density == null) continue;
+    if (!sparkMap[b.recipe]) sparkMap[b.recipe] = [];
+    sparkMap[b.recipe].push(+b.blk_density);
+  }
+
+  const allDen   = recipes.filter(r => r.avg_density).map(r => r.avg_density);
+  const denMin   = allDen.length ? Math.min(...allDen) : 0;
+  const denMax   = allDen.length ? Math.max(...allDen) : 30;
+  const denRange = (denMax - denMin) || 5;
+
+  // Count off-spec blocks (where grade mapping exists and target is set)
+  let offSpecCount = 0;
+  for (const b of allBlocks) {
+    const g = gradeForRecipe(b.recipe);
+    const st = densityStatus(b.blk_density, g);
+    if (st === 'high' || st === 'low') offSpecCount++;
+  }
+  const offEl = document.getElementById('s-offspec');
+  offEl.textContent = offSpecCount;
+  offEl.style.color = offSpecCount > 0 ? 'var(--danger)' : 'var(--good)';
+
+  if (!recipes.length) {
+    document.getElementById('recipe-grid').innerHTML = '<div class="empty">No blocks recorded for this period.</div>';
+    return;
+  }
+
+  // ── Current run: last logged block (only shown when viewing current week) ──
+  let currentRunCard = '';
+  const isCurrentWeek = viewEndDate === todayNZ();
+  if (isCurrentWeek && allBlocks.length > 0) {
+    // allBlocks is ordered asc; get the last one
+    const lastBlk = [...allBlocks].sort((a, b) => new Date(b.produced_at) - new Date(a.produced_at))[0];
+    if (lastBlk) {
+      const crRecipe = lastBlk.recipe;
+      const crGrade  = gradeForRecipe(crRecipe);
+      const crGcls   = crGrade ? gradeColorClass(crGrade.erp_grade) : '';
+      const crGcv    = crGcls ? `var(--gc-${crGcls})` : 'var(--accent)';
+      const crDen    = lastBlk.blk_density != null ? +lastBlk.blk_density : null;
+      const crWt     = lastBlk.blk_weight  != null ? +lastBlk.blk_weight  : null;
+      const crTime   = new Date(lastBlk.produced_at).toLocaleTimeString('en-NZ', { timeZone: 'Pacific/Auckland', hour: '2-digit', minute: '2-digit' });
+      const crStatus = densityStatus(crDen, crGrade);
+      const crDenValCls = crStatus === 'ok' ? 'density-val ok' : crStatus === 'high' ? 'density-val high' : crStatus === 'low' ? 'density-val low' : 'density-val';
+
+      // How long ago was the last block?
+      const minsAgo = Math.round((Date.now() - new Date(lastBlk.produced_at).getTime()) / 60000);
+      const agoStr  = minsAgo < 2 ? 'just now' : minsAgo < 60 ? `${minsAgo} min ago` : `${Math.round(minsAgo/60)} hr ago`;
+
+      // "This run" = consecutive blocks at the end with the same recipe (walk backwards)
+      const sortedDesc = [...allBlocks].sort((a, b) => new Date(b.produced_at) - new Date(a.produced_at));
+      const crRunBlocks = [];
+      for (const b of sortedDesc) {
+        if (b.recipe !== crRecipe) break;
+        crRunBlocks.push(b);
+      }
+      crRunBlocks.reverse(); // back to chronological order
+      const crRunCount = crRunBlocks.length;
+      const crRunDensities = crRunBlocks.map(b => b.blk_density != null ? +b.blk_density : null).filter(v => v != null);
+      const crRunAvgDen = crRunDensities.length ? crRunDensities.reduce((a, b) => a + b, 0) / crRunDensities.length : null;
+
+      // Sparkline uses only THIS RUN's blocks
+      const crSeries = crRunDensities;
+      const crSpark  = buildSpark(crSeries, crGrade, true);
+
+      // 7-day total for this recipe (shown in header count)
+      const crAgg = byRecipe[crRecipe];
+      const crBlocks = crAgg ? crAgg.blocks : 0;
+
+      const crTargetPct = crGrade && crGrade.target_density != null && crDen != null
+        ? Math.max(0, Math.min(100, Math.round(((crGrade.target_density - denMin) / denRange) * 100))) : null;
+      const crDenPct = crDen != null
+        ? Math.max(0, Math.min(100, Math.round(((crDen - denMin) / denRange) * 100))) : 0;
+
+      const crRunAvgStatus = densityStatus(crRunAvgDen, crGrade);
+      const crRunAvgCls = crRunAvgStatus === 'ok' ? 'density-val ok' : crRunAvgStatus === 'high' ? 'density-val high' : crRunAvgStatus === 'low' ? 'density-val low' : 'density-val';
+
+      currentRunCard = `<div class="recipe-card current-run">
+        <div class="recipe-card-head" style="background:rgba(0,133,255,.05)">
+          <div style="min-width:0;flex:1">
+            <div class="now-badge"><span class="now-dot"></span> Now Running</div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:1px">
+              ${crGrade ? `<span style="font-family:var(--ff-head);font-size:14px;font-weight:700;letter-spacing:.01em;color:${crGcv}">${crGrade.display_name}</span>
+              <span class="chip-grade chip-${crGcls || ''}" style="${!crGcls ? 'background:rgba(0,133,255,.1);color:var(--accent)' : ''}">${crGrade.erp_grade}</span>` : ''}
+              ${(crStatus === 'high' || crStatus === 'low') ? `<span class="alert-pill ${crStatus}">${crStatus === 'high' ? '▲ HIGH' : '▼ LOW'}</span>` : ''}
+            </div>
+            <div class="recipe-name" title="${crRecipe}" style="font-size:11px;font-weight:400;color:var(--muted);font-family:var(--ff-body);letter-spacing:0">${crRecipe}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:10px">
+            <div style="font-family:var(--ff-head);font-size:28px;font-weight:700;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums">${crRunCount}</div>
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">this run</div>
+          </div>
+        </div>
+        <div class="recipe-body">
+          ${crGrade && crGrade.target_density != null ? `<div style="font-size:11px;color:var(--muted);margin-bottom:2px">Target: ${crGrade.target_density} ±${crGrade.tol} kg/m³</div>` : ''}
+          ${crSeries.length > 1 ? `<div class="spark-wrap spark-lg">${buildSpark(crSeries, crGrade, true)}</div>` : ''}
+        </div>
+        <div class="last-block-strip">
+          <div class="last-block-item">
+            <div class="last-block-label">Last block</div>
+            <div class="last-block-val">${crTime} (${agoStr})</div>
+          </div>
+          <div class="last-block-item">
+            <div class="last-block-label">Run avg density</div>
+            <div class="last-block-val ${crRunAvgStatus !== 'unknown' ? crRunAvgCls : ''}">${crRunAvgDen != null ? crRunAvgDen.toFixed(1) + ' kg/m³' : '—'}</div>
+          </div>
+          ${crDen != null ? `<div class="last-block-item">
+            <div class="last-block-label">Last density</div>
+            <div class="last-block-val ${crDenValCls}">${crDen.toFixed(1)} kg/m³</div>
+          </div>` : ''}
+          ${crWt != null ? `<div class="last-block-item">
+            <div class="last-block-label">Last weight</div>
+            <div class="last-block-val">${crWt.toFixed(1)} kg</div>
+          </div>` : ''}
+        </div>
+      </div>`;
+    }
+  }
+
+  const grid = document.getElementById('recipe-grid');
+  grid.innerHTML = currentRunCard + recipes.map(r => {
+    const grade   = gradeForRecipe(r.recipe);
+    const den     = r.avg_density != null ? r.avg_density : null;
+    const denStr  = den != null ? den.toFixed(1) : null;
+    const wt      = r.avg_weight  != null ? r.avg_weight.toFixed(1)  : null;
+    const cycMin  = r.avg_cycle_s != null ? (r.avg_cycle_s / 60).toFixed(1) : null;
+    const denPct  = denStr ? Math.max(0, Math.min(100, Math.round(((+denStr - denMin) / denRange) * 100))) : 0;
+
+    const status  = densityStatus(den, grade);
+    const targetPct = grade && grade.target_density != null
+      ? Math.max(0, Math.min(100, Math.round(((grade.target_density - denMin) / denRange) * 100)))
+      : null;
+
+    const cardCls = status === 'high' ? 'recipe-card alert-high' : status === 'low' ? 'recipe-card alert-low' : 'recipe-card';
+    const denValCls = status === 'ok' ? 'density-val ok' : status === 'high' ? 'density-val high' : status === 'low' ? 'density-val low' : 'density-val';
+
+    const gcls = grade ? gradeColorClass(grade.erp_grade) : '';
+    const gcv  = gcls ? `var(--gc-${gcls})` : 'var(--muted)';
+    const gcbg = gcls ? `var(--gc-${gcls}-bg)` : 'transparent';
+
+    const series = sparkMap[r.recipe] || [];
+    const spark  = buildSpark(series, grade, false, gcv);
+
+    const alertPill = (status === 'high' || status === 'low')
+      ? `<span class="alert-pill ${status}">${status === 'high' ? '▲ HIGH' : '▼ LOW'}</span>` : '';
+
+    return `<div class="${cardCls}">
+      <div class="recipe-card-head" style="${gcls ? `border-bottom-color:${gcbg}` : ''}">
+        <div style="min-width:0;flex:1">
+          ${grade ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:1px">
+            <span style="font-family:var(--ff-head);font-size:14px;font-weight:700;letter-spacing:.01em;color:${gcv}">${grade.display_name}</span>
+            <span class="chip-grade chip-${gcls || 'grade'}" style="${!gcls ? 'background:rgba(0,133,255,.1);color:var(--accent)' : ''}">${grade.erp_grade}</span>
+            ${alertPill}
+          </div>` : `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">${alertPill}</div>`}
+          <div class="recipe-name" title="${r.recipe}" style="font-size:11px;font-weight:400;color:var(--muted);font-family:var(--ff-body);letter-spacing:0">${r.recipe}</div>
+        </div>
+        <div class="recipe-count" style="${gcls ? `color:${gcv}` : ''}">${r.blocks}</div>
+      </div>
+      <div class="recipe-body">
+        ${denStr ? `<div class="density-row">
+          <div class="density-label">Avg density</div>
+          <div class="meter-wrap">
+            <div class="meter-fill" style="width:${denPct}%"></div>
+            ${targetPct != null ? `<div class="meter-target" style="left:${targetPct}%"></div>` : ''}
+          </div>
+          <div class="${denValCls}">${denStr} kg/m³</div>
+        </div>
+        ${grade && grade.target_density != null ? `<div style="font-size:11px;color:var(--muted)">Target: ${grade.target_density} ±${grade.tol} kg/m³</div>` : ''}` : ''}
+        ${series.length > 2 ? `<div class="spark-wrap">${spark}</div>` : ''}
+      </div>
+      <div class="recipe-stats">
+        <div class="recipe-stat">
+          <div class="recipe-stat-label">Weight</div>
+          <div class="recipe-stat-val">${wt ? wt + ' kg' : '—'}</div>
+        </div>
+        <div class="recipe-stat">
+          <div class="recipe-stat-label">Cycle</div>
+          <div class="recipe-stat-val">${cycMin ? cycMin + ' min' : '—'}</div>
+        </div>
+        <div class="recipe-stat">
+          <div class="recipe-stat-label">Share</div>
+          <div class="recipe-stat-val">${Math.round(r.blocks / (totalBlocks || 1) * 100)}%</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
+  if (vals.length < 2) return '';
+  const W = 260, H = 34, PAD = 2;
+  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 0.5;
+  const pts = vals.map((v, i) => [
+    PAD + i / (vals.length - 1) * (W - PAD * 2),
+    PAD + (1 - (v - min) / rng) * (H - PAD * 2)
+  ]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+  const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H} L${pts[0][0].toFixed(1)} ${H} Z`;
+
+  // Determine line colour: current run = accent blue, off-spec = danger/warn, in-spec = grade colour or good
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const avgStatus = densityStatus(avg, grade);
+  const lineColor = isCurrentRun      ? 'var(--accent)'
+                  : avgStatus === 'high' ? 'var(--danger)'
+                  : avgStatus === 'low'  ? 'var(--warn)'
+                  : avgStatus === 'ok' && gradeColor ? gradeColor
+                  : avgStatus === 'ok'   ? 'var(--good)'
+                  : gradeColor || 'var(--amber)';
+  const fillId = `sg${vals.length}_${Math.round(avg*10)}`;
+
+  // Target band lines
+  let bandLines = '';
+  if (grade && grade.target_density != null) {
+    const t = grade.target_density;
+    const yTarget = PAD + (1 - (t - min) / rng) * (H - PAD * 2);
+    const yHi     = PAD + (1 - (t + grade.tol - min) / rng) * (H - PAD * 2);
+    const yLo     = PAD + (1 - (t - grade.tol - min) / rng) * (H - PAD * 2);
+    const inRange = y => y >= -2 && y <= H + 2;
+    // Shaded band between hi and lo
+    const bTop = Math.max(0, Math.min(H, inRange(yHi) ? yHi : 0));
+    const bBot = Math.max(0, Math.min(H, inRange(yLo) ? yLo : H));
+    bandLines += `<rect x="0" y="${bTop.toFixed(1)}" width="${W}" height="${(bBot-bTop).toFixed(1)}" fill="var(--good)" opacity=".07"/>`;
+    if (inRange(yTarget)) bandLines += `<line x1="0" y1="${yTarget.toFixed(1)}" x2="${W}" y2="${yTarget.toFixed(1)}" stroke="var(--fg)" stroke-width="1" stroke-dasharray="4,3" opacity=".3" vector-effect="non-scaling-stroke"/>`;
+    if (inRange(yHi)) bandLines += `<line x1="0" y1="${yHi.toFixed(1)}" x2="${W}" y2="${yHi.toFixed(1)}" stroke="var(--danger)" stroke-width="1" stroke-dasharray="2,4" opacity=".5" vector-effect="non-scaling-stroke"/>`;
+    if (inRange(yLo)) bandLines += `<line x1="0" y1="${yLo.toFixed(1)}" x2="${W}" y2="${yLo.toFixed(1)}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="2,4" opacity=".5" vector-effect="non-scaling-stroke"/>`;
+
+    // Average dot
+    const yAvg = PAD + (1 - (avg - min) / rng) * (H - PAD * 2);
+    const xAvg = W - PAD;
+    if (yAvg >= 0 && yAvg <= H) {
+      bandLines += `<circle cx="${xAvg.toFixed(1)}" cy="${yAvg.toFixed(1)}" r="3" fill="${lineColor}" opacity=".9"/>`;
+    }
+  }
+
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${lineColor}" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${bandLines}
+    <path d="${area}" fill="url(#${fillId})"/>
+    <path d="${line}" fill="none" stroke="${lineColor}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+// ── grade suggestion (label-as) ───────────────────────────────────────────────
+// Returns HTML chip indicating what ERP grade a block SHOULD be labelled as.
+// Logic: build array of all grades sorted by target_density asc.
+// For block with density D and current grade G:
+//   - Find the HIGHEST grade whose (target - tol) ≤ D ≤ (target + tol) → that's the "should be" grade
+//   - If it matches G → green (ok)
+//   - If target_density < G.target_density → orange (downgrade)
+//   - If target_density > G.target_density → blue (upgrade)
+function labelAsChip(density, currentRecipe) {
+  if (density == null) return '—';
+  // Build sorted grade list from gradeMap values (unique by erp_grade)
+  const seen = new Set();
+  const grades = [];
+  for (const g of Object.values(gradeMap)) {
+    if (!seen.has(g.erp_grade)) {
+      seen.add(g.erp_grade);
+      if (g.target_density != null) grades.push(g);
+    }
+  }
+  if (!grades.length) return '—';
+  grades.sort((a, b) => a.target_density - b.target_density);
+
+  const current = gradeMap[currentRecipe] || null;
+
+  // Find all grades whose band includes this density
+  const qualifying = grades.filter(g => {
+    const tol = g.tol || 1;
+    return density >= g.target_density - tol && density <= g.target_density + tol;
+  });
+
+  let suggested = null;
+  if (qualifying.length) {
+    // Prefer the grade whose target is closest to density
+    qualifying.sort((a, b) => Math.abs(a.target_density - density) - Math.abs(b.target_density - density));
+    suggested = qualifying[0];
+  } else {
+    // Outside all bands — find the nearest grade
+    let best = null, bestDist = Infinity;
+    for (const g of grades) {
+      const d = Math.abs(g.target_density - density);
+      if (d < bestDist) { bestDist = d; best = g; }
+    }
+    suggested = best;
+  }
+
+  if (!suggested) return '—';
+
+  if (current && suggested.erp_grade === current.erp_grade) {
+    return `<span class="label-chip label-ok">✓ ${suggested.erp_grade}</span>`;
+  }
+  if (current && suggested.target_density < current.target_density) {
+    return `<span class="label-chip label-down">↓ ${suggested.erp_grade}</span>`;
+  }
+  if (current && suggested.target_density > current.target_density) {
+    return `<span class="label-chip label-up">↑ ${suggested.erp_grade}</span>`;
+  }
+  // No current grade mapping — just show suggested
+  return `<span class="label-chip label-ok">${suggested.erp_grade}</span>`;
+}
+
+// ── recent table ──────────────────────────────────────────────────────────────
+async function loadRecent(startDate) {
+  const winStartUTC = nzDayStartUTC(startDate);
+  const url = new URL(`${SB_URL}/rest/v1/block_moulder_log`);
+  url.searchParams.set('select', 'produced_at,recipe,blk_id,blk_density,blk_weight,cycle_time_s');
+  url.searchParams.set('produced_at', `gte.${winStartUTC}`);
+  url.searchParams.set('order', 'produced_at.desc');
+  url.searchParams.set('limit', '50');
+  const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0,200)}`);
+  const rows = await r.json();
+
+  const tbody = document.getElementById('tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty">No blocks for this period.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(row => {
+    const dt    = new Date(row.produced_at);
+    const nzDt  = dt.toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', day: 'numeric', month: 'short' })
+                + ' ' + dt.toLocaleTimeString('en-NZ', { timeZone: 'Pacific/Auckland', hour: '2-digit', minute: '2-digit' });
+    const den   = row.blk_density != null ? +row.blk_density : null;
+    const grade = gradeForRecipe(row.recipe);
+    const st    = densityStatus(den, grade);
+    const rowCls = st === 'high' ? 'row-high' : st === 'low' ? 'row-low' : '';
+    const cycMin = row.cycle_time_s != null ? (row.cycle_time_s / 60).toFixed(1) : '—';
+    const badge  = st === 'ok' ? '<span class="badge badge-ok">OK</span>'
+                 : st === 'high' ? '<span class="badge badge-high">HIGH</span>'
+                 : st === 'low'  ? '<span class="badge badge-low">LOW</span>'
+                 : '—';
+    const target = grade && grade.target_density != null ? grade.target_density.toFixed(1) : '—';
+    const labelChip = labelAsChip(den, row.recipe);
+    const tgcls = grade ? gradeColorClass(grade.erp_grade) : '';
+    const tgcv  = tgcls ? `var(--gc-${tgcls})` : null;
+    const recipeChip = tgcls
+      ? `<span class="chip-grade chip-${tgcls}">${row.recipe || '—'}</span>`
+      : `<span class="chip">${row.recipe || '—'}</span>`;
+
+    return `<tr class="${rowCls}">
+      <td style="white-space:nowrap">${nzDt}</td>
+      <td>${recipeChip}</td>
+      <td>${labelChip}</td>
+      <td>${tgcv ? `<span style="font-weight:600;color:${tgcv}">${grade.erp_grade}</span>` : (grade ? grade.erp_grade : '—')}</td>
+      <td>${den != null ? den.toFixed(1) : '—'}</td>
+      <td>${target}</td>
+      <td>${badge}</td>
+      <td>${row.blk_weight != null ? (+row.blk_weight).toFixed(1) : '—'}</td>
+      <td>${cycMin !== '—' ? cycMin + ' min' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── mapping admin ──────────────────────────────────────────────────────────────
+async function loadMapping() {
+  const grid = document.getElementById('map-grid');
+  grid.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
+  try {
+    const rows = await sbFetch('recipe_grade_map', { select: 'id,erp_grade,display_name,recipes,target_density,density_tolerance,notes', order: 'erp_grade.asc' });
+    if (!rows.length) {
+      grid.innerHTML = '<div class="empty">No grades found. Run recipe_grade_map.sql in Supabase first.</div>';
+      return;
+    }
+    grid.innerHTML = rows.map(g => {
+      const recipeVal = (g.recipes || []).join(', ');
+      const tol = g.density_tolerance != null ? g.density_tolerance : '1.0';
+      return `<div class="map-card" id="mc-${g.id}">
+        <div class="map-row">
+          <div class="map-erp">${g.erp_grade}</div>
+          <div class="map-name">${g.display_name}</div>
+          <div class="map-field">
+            <div class="map-field-label">Recipes (comma-separated)</div>
+            <input id="mr-${g.id}" type="text" placeholder="e.g. M20, M-20 Standard" value="${recipeVal.replace(/"/g,'&quot;')}">
+          </div>
+          <div class="map-field">
+            <div class="map-field-label">Target kg/m³</div>
+            <input id="mt-${g.id}" type="number" step="0.5" min="1" max="100" value="${g.target_density != null ? g.target_density : ''}">
+          </div>
+          <div class="map-field">
+            <div class="map-field-label">Tol ±</div>
+            <input id="ml-${g.id}" type="number" step="0.1" min="0.1" max="10" value="${tol}">
+          </div>
+          <span class="map-status" id="ms-${g.id}"></span>
+          <button class="btn btn-ghost btn-sm" onclick="saveMapping(${g.id})">Save</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    grid.innerHTML = `<div class="empty">Error loading grades: ${e.message}</div>`;
+  }
+}
+
+async function saveMapping(id) {
+  const recipesRaw = document.getElementById(`mr-${id}`).value;
+  const targetRaw  = document.getElementById(`mt-${id}`).value;
+  const tolRaw     = document.getElementById(`ml-${id}`).value;
+  const notes      = document.getElementById(`mn-${id}`).value;
+  const status     = document.getElementById(`ms-${id}`);
+
+  const recipes = recipesRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const target  = targetRaw !== '' ? parseFloat(targetRaw) : null;
+  const tol     = tolRaw    !== '' ? parseFloat(tolRaw)    : 1.0;
+
+  try {
+    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, notes: notes || null });
+    status.textContent = '✓ Saved';
+    status.className = 'map-status saved';
+    // Refresh grade map cache
+    await loadGradeMap();
+    setTimeout(() => { status.textContent = ''; status.className = 'map-status'; }, 3000);
+  } catch (e) {
+    status.textContent = '✗ ' + e.message.slice(0, 60);
+    status.className = 'map-status error';
+  }
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+function setDot(s) { $dot.className = 'pulse ' + (s === 'ok' ? 'live' : s === 'err' ? 'err' : 'idle'); }
+function showErr(m) { $err.textContent = '⚠ ' + m; $err.style.display = 'block'; }
+function clearErr()  { $err.style.display = 'none'; }
+</script>
