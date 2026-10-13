@@ -260,7 +260,7 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 /* single compact row */
 .map-row {
   display: grid;
-  grid-template-columns: 90px 110px 1fr 90px 80px auto auto;
+  grid-template-columns: 90px 110px 1fr 90px 80px auto auto auto;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
@@ -623,11 +623,11 @@ function renderBars(id, weeks, valFn, heightFn, fmtFn, danger = false) {
 // ── grade map (cached) ────────────────────────────────────────────────────────
 async function loadGradeMap() {
   try {
-    const rows = await sbFetch('recipe_grade_map', { select: 'erp_grade,display_name,recipes,target_density,density_tolerance', active: 'eq.true' });
+    const rows = await sbFetch('recipe_grade_map', { select: 'erp_grade,display_name,recipes,target_density,density_tolerance,ignore_label_as', active: 'eq.true' });
     gradeMap = {};
     for (const r of rows) {
       for (const recipe of (r.recipes || [])) {
-        gradeMap[recipe] = { erp_grade: r.erp_grade, display_name: r.display_name, target_density: r.target_density, tol: +r.density_tolerance };
+        gradeMap[recipe] = { erp_grade: r.erp_grade, display_name: r.display_name, target_density: r.target_density, tol: +r.density_tolerance, ignore_label_as: !!r.ignore_label_as };
       }
     }
   } catch(e) {
@@ -999,6 +999,9 @@ function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
 //   - If target_density > G.target_density → blue (upgrade)
 function labelAsChip(density, currentRecipe) {
   if (density == null) return '—';
+  // Grade flagged as "ignore label as" — never suggest relabelling
+  const curr = gradeMap[currentRecipe] || null;
+  if (curr && curr.ignore_label_as) return `<span class="label-chip" style="background:rgba(107,114,128,.1);color:var(--muted)">${curr.erp_grade}</span>`;
   // Build sorted grade list from gradeMap values (unique by erp_grade)
   const seen = new Set();
   const grades = [];
@@ -1035,6 +1038,14 @@ function labelAsChip(density, currentRecipe) {
   }
 
   if (!suggested) return '—';
+
+  // If density is within the CURRENT recipe's own tolerance band → always show as OK, no relabelling
+  if (current && current.target_density != null) {
+    const tol = current.tol || 1;
+    if (density >= current.target_density - tol && density <= current.target_density + tol) {
+      return `<span class="label-chip label-ok">✓ ${current.erp_grade}</span>`;
+    }
+  }
 
   if (current && suggested.erp_grade === current.erp_grade) {
     return `<span class="label-chip label-ok">✓ ${suggested.erp_grade}</span>`;
@@ -1106,7 +1117,7 @@ async function loadMapping() {
   const grid = document.getElementById('map-grid');
   grid.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
   try {
-    const rows = await sbFetch('recipe_grade_map', { select: 'id,erp_grade,display_name,recipes,target_density,density_tolerance,notes', order: 'erp_grade.asc' });
+    const rows = await sbFetch('recipe_grade_map', { select: 'id,erp_grade,display_name,recipes,target_density,density_tolerance,ignore_label_as,notes', order: 'erp_grade.asc' });
     if (!rows.length) {
       grid.innerHTML = '<div class="empty">No grades found. Run recipe_grade_map.sql in Supabase first.</div>';
       return;
@@ -1130,6 +1141,9 @@ async function loadMapping() {
             <div class="map-field-label">Tol ±</div>
             <input id="ml-${g.id}" type="number" step="0.1" min="0.1" max="10" value="${tol}">
           </div>
+          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Tick to exclude this grade from Label As suggestions — useful for grades with a distinct colour that can't be substituted">
+            <input type="checkbox" id="mi-${g.id}" ${g.ignore_label_as ? 'checked' : ''}> Ignore label
+          </label>
           <span class="map-status" id="ms-${g.id}"></span>
           <button class="btn btn-ghost btn-sm" onclick="saveMapping(${g.id})">Save</button>
         </div>
@@ -1144,15 +1158,18 @@ async function saveMapping(id) {
   const recipesRaw = document.getElementById(`mr-${id}`).value;
   const targetRaw  = document.getElementById(`mt-${id}`).value;
   const tolRaw     = document.getElementById(`ml-${id}`).value;
-  const notes      = document.getElementById(`mn-${id}`).value;
-  const status     = document.getElementById(`ms-${id}`);
+  const notesEl      = document.getElementById(`mn-${id}`);
+  const notes        = notesEl ? notesEl.value : null;
+  const ignoreEl     = document.getElementById(`mi-${id}`);
+  const ignoreLabelAs = ignoreEl ? ignoreEl.checked : false;
+  const status       = document.getElementById(`ms-${id}`);
 
   const recipes = recipesRaw.split(',').map(s => s.trim()).filter(Boolean);
   const target  = targetRaw !== '' ? parseFloat(targetRaw) : null;
   const tol     = tolRaw    !== '' ? parseFloat(tolRaw)    : 1.0;
 
   try {
-    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, notes: notes || null });
+    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, ignore_label_as: ignoreLabelAs, notes: notes || null });
     status.textContent = '✓ Saved';
     status.className = 'map-status saved';
     // Refresh grade map cache
