@@ -616,12 +616,13 @@ async function sbPatch(path, id, body) {
 
 async function sbUpsert(path, rows, onConflict) {
   const url = new URL(`${SB_URL}/rest/v1/${path}`);
+  if (onConflict) url.searchParams.set('on_conflict', onConflict);
   const r = await fetch(url, {
     method: 'POST',
     headers: {
       apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: `resolution=merge-duplicates,return=minimal,on_conflict=branch_no,grade,production_date`,
+      Prefer: 'resolution=merge-duplicates,return=minimal',
     },
     body: JSON.stringify(rows)
   });
@@ -1437,7 +1438,7 @@ async function loadForecast() {
       sbFetch('capacity_machines',      { select: 'seqno,branchno' }),
       sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
       sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
-      sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
+      sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
       sbFetch('capacity_app_settings',  { select: 'settings', id: 'eq.1' }),
     ]);
 
