@@ -614,6 +614,103 @@ async function sbPatch(path, id, body) {
   if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
 }
 
+async function sbUpsert(path, rows, onConflict) {
+  const url = new URL(`${SB_URL}/rest/v1/${path}`);
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: {
+      apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: `resolution=merge-duplicates,return=minimal,on_conflict=branch_no,grade,production_date`,
+    },
+    body: JSON.stringify(rows)
+  });
+  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+}
+
+// Sync today's block_moulder_log counts → block_production, grouped by labelAs grade.
+// Only syncs for today (NZ date) since historical data shouldn't be rewritten.
+const FC_BRANCH_NO = 8; // Canterbury moulder branch
+async function syncProductionFromLog() {
+  try {
+    const today = todayNZ();
+    const dayStartUTC = nzDayStartUTC(today);
+    // Fetch today's blocks
+    const url = new URL(`${SB_URL}/rest/v1/block_moulder_log`);
+    url.searchParams.set('select', 'recipe,blk_density,produced_at');
+    url.searchParams.set('produced_at', `gte.${dayStartUTC}`);
+    url.searchParams.set('limit', '5000');
+    const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
+    if (!r.ok) return;
+    const blocks = await r.json();
+
+    // Count by labelAs grade (resolved via labelAsGrade helper)
+    const countByGrade = {};
+    for (const b of blocks) {
+      const grade = labelAsGrade(b.blk_density, b.recipe);
+      if (!grade) continue;
+      countByGrade[grade] = (countByGrade[grade] || 0) + 1;
+    }
+
+    if (!Object.keys(countByGrade).length) return;
+
+    // Upsert one row per grade into block_production
+    const rows = Object.entries(countByGrade).map(([grade, qty]) => ({
+      branch_no: FC_BRANCH_NO,
+      grade,
+      production_date: today,
+      qty,
+    }));
+
+    await sbUpsert('block_production', rows, 'branch_no,grade,production_date');
+  } catch(e) {
+    console.warn('syncProductionFromLog:', e.message);
+  }
+}
+
+// Returns the ERP grade string that labelAsChip() would suggest (without HTML), or null.
+function labelAsGrade(density, recipe) {
+  if (density == null) return null;
+  const curr = gradeMap[recipe] || null;
+  // If current grade has ignore_label_as, use the current grade as-is (it's a distinct product)
+  if (curr && curr.ignore_label_as) return curr.erp_grade;
+  // Build candidate list (non-ignored grades with a target density)
+  const seen = new Set();
+  const grades = [];
+  for (const g of Object.values(gradeMap)) {
+    if (!seen.has(g.erp_grade) && !g.ignore_label_as && g.target_density != null) {
+      seen.add(g.erp_grade);
+      grades.push(g);
+    }
+  }
+  if (!grades.length) return curr ? curr.erp_grade : null;
+  grades.sort((a, b) => a.target_density - b.target_density);
+
+  // If density falls within current grade's own band, label as current
+  if (curr && curr.target_density != null) {
+    const tol = curr.tol || 1;
+    if (density >= curr.target_density - tol && density <= curr.target_density + tol) {
+      return curr.erp_grade;
+    }
+  }
+
+  // Find best candidate
+  const qualifying = grades.filter(g => {
+    const tol = g.tol || 1;
+    return density >= g.target_density - tol && density <= g.target_density + tol;
+  });
+  if (qualifying.length) {
+    qualifying.sort((a, b) => Math.abs(a.target_density - density) - Math.abs(b.target_density - density));
+    return qualifying[0].erp_grade;
+  }
+  let best = null, bestDist = Infinity;
+  for (const g of grades) {
+    const d = Math.abs(g.target_density - density);
+    if (d < bestDist) { bestDist = d; best = g; }
+  }
+  return best ? best.erp_grade : (curr ? curr.erp_grade : null);
+}
+
 // ── connect ───────────────────────────────────────────────────────────────────
 function connect() {
   SB_URL = $iUrl.value.trim().replace(/\/$/, '');
@@ -624,19 +721,20 @@ function connect() {
   clearErr();
   loadAll();
   clearInterval(autoTick);
-  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) { loadDashboard(); syncProductionFromLog(); } }, 5 * 60 * 1000);
 }
 
 if (su && sk) {
   SB_URL = su; SB_KEY = sk;
   loadAll();
-  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) { loadDashboard(); syncProductionFromLog(); } }, 5 * 60 * 1000);
 }
 
 async function loadAll() {
   await loadGradeMap();
   loadDashboard();
   loadWeeklyBars();
+  syncProductionFromLog(); // write today's label-as counts → block_production
 }
 
 // ── 4-week KPI bar charts ─────────────────────────────────────────────────────
@@ -1099,11 +1197,11 @@ function labelAsChip(density, currentRecipe) {
   // Grade flagged as "ignore label as" — never suggest relabelling
   const curr = gradeMap[currentRecipe] || null;
   if (curr && curr.ignore_label_as) return `<span class="label-chip" style="background:rgba(107,114,128,.1);color:var(--muted)">${curr.erp_grade}</span>`;
-  // Build sorted grade list from gradeMap values (unique by erp_grade)
+  // Build sorted grade list from gradeMap values (unique by erp_grade, excluding ignore_label_as grades)
   const seen = new Set();
   const grades = [];
   for (const g of Object.values(gradeMap)) {
-    if (!seen.has(g.erp_grade)) {
+    if (!seen.has(g.erp_grade) && !g.ignore_label_as) {
       seen.add(g.erp_grade);
       if (g.target_density != null) grades.push(g);
     }
