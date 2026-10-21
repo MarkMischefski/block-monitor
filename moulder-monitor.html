@@ -287,6 +287,64 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 .stat-bar-fill.current { opacity: 1; }
 .stat-bar-lbl { font-size: 8px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* ── forecast tile grid ── */
+.fc-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.fc-grade-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.fc-grade-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.fc-grade-name { font-family: var(--ff-head); font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+.fc-stock-pill {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+  background: rgba(0,133,255,.1); color: var(--accent);
+}
+.fc-stock-pill.low { background: rgba(232,146,10,.12); color: var(--warn); }
+.fc-stock-pill.critical { background: rgba(220,38,38,.12); color: var(--danger); }
+.fc-tbl-wrap { overflow-x: auto; }
+.fc-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.fc-tbl th {
+  text-align: center; padding: 4px 3px;
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); background: var(--bg);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.fc-tbl th.th-grade { text-align: left; }
+.fc-tbl td {
+  padding: 4px 4px; text-align: center;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fc-tbl td.td-label { text-align: left; font-size: 11px; color: var(--muted); padding-left: 4px; white-space: nowrap; }
+.fc-tbl tr:last-child td { border-bottom: none; }
+.fc-col-today { background: rgba(0,133,255,.04); }
+.fc-col-past  { opacity: .65; }
+.fc-val-prod  { color: var(--good); font-weight: 600; }
+.fc-val-tmpl  { color: var(--accent); font-weight: 600; }
+.fc-val-req   { color: var(--fg); }
+.fc-val-bal   { font-weight: 700; }
+.fc-val-bal.ok       { color: var(--good); }
+.fc-val-bal.low      { color: var(--warn); }
+.fc-val-bal.critical { color: var(--danger); }
+.fc-day-head  { font-size: 10px; font-weight: 600; }
+.fc-day-sub   { font-size: 9px; color: var(--muted); }
+.fc-divider th, .fc-divider td { background: var(--bg) !important; opacity: 1 !important; padding: 2px 0 !important; border: none !important; }
+.fc-divider-line { height: 1px; background: var(--border); margin: 0 8px; }
+.fc-section-label { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 4px 8px 0; }
+
 /* ── spinner / empty ── */
 .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -324,6 +382,7 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 <!-- TABS -->
 <div id="tab-bar">
   <button class="tab active" data-tab="dashboard">Production</button>
+  <button class="tab" data-tab="forecast">Forecast</button>
   <button class="tab" data-tab="mapping">Grade Mapping</button>
 </div>
 
@@ -407,6 +466,18 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
   </main>
 </div>
 
+<!-- ═══════════════════════════ FORECAST PAGE ════════════════════════════════ -->
+<div id="forecast-page" class="page">
+  <div id="fc-wrap" style="padding:16px 20px 40px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <h2 style="font-family:var(--ff-head);font-size:16px;font-weight:700;letter-spacing:.02em;flex:1">Canterbury Block Forecast</h2>
+      <span style="font-size:11px;color:var(--muted)">Branches 4 &amp; 8 · last 5 days + next 14</span>
+      <button class="btn btn-ghost btn-sm" id="btn-fc-refresh">↻ Refresh</button>
+    </div>
+    <div id="fc-content"><div class="loading-cell"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
 <!-- ═════════════════════════ GRADE MAPPING PAGE ════════════════════════════ -->
 <div id="mapping-page" class="page">
   <div id="map-page">
@@ -468,6 +539,7 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   t.classList.add('active');
   document.getElementById(t.dataset.tab + '-page').classList.add('active');
   if (t.dataset.tab === 'mapping' && SB_URL) loadMapping();
+  if (t.dataset.tab === 'forecast' && SB_URL) loadForecast();
 }));
 document.getElementById('btn-map-refresh').addEventListener('click', loadMapping);
 
@@ -504,6 +576,31 @@ async function sbFetch(path, params = {}) {
   const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return r.json();
+}
+
+// Paginated fetch — use for large tables (sales lines, stock items)
+async function sbFetchAll(path, params = {}, pageSize = 1000) {
+  const all = [];
+  let from = 0;
+  while (true) {
+    const url = new URL(`${SB_URL}/rest/v1/${path}`);
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) v.forEach(vi => url.searchParams.append(k, vi));
+      else url.searchParams.set(k, v);
+    }
+    const r = await fetch(url, {
+      headers: {
+        apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json',
+        'Range': `${from}-${from + pageSize - 1}`, 'Range-Unit': 'items', 'Prefer': 'count=none'
+      }
+    });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const page = await r.json();
+    all.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
 }
 
 async function sbPatch(path, id, body) {
@@ -1178,6 +1275,386 @@ async function saveMapping(id) {
   } catch (e) {
     status.textContent = '✗ ' + e.message.slice(0, 60);
     status.className = 'map-status error';
+  }
+}
+
+// ── forecast ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-fc-refresh').addEventListener('click', loadForecast);
+
+// Canterbury branch numbers
+const FC_BRANCHES = [4, 8];
+
+function fcDateRange() {
+  // Returns array of working-day date strings: 3 prior working days + today + 8 future working days
+  // Weekends are excluded entirely
+  const today = todayNZ();
+  const days = [];
+  // Past: walk back to find 3 working days
+  const pastDays = [];
+  const cur = new Date(today + 'T12:00:00Z');
+  for (let i = 0; i < 30 && pastDays.length < 3; i++) {
+    cur.setUTCDate(cur.getUTCDate() - 1);
+    const dow = cur.getUTCDay();
+    if (dow !== 0 && dow !== 6) pastDays.unshift(cur.toISOString().slice(0, 10));
+  }
+  days.push(...pastDays);
+  days.push(today);
+  // Future: 8 working days from tomorrow
+  const fut = new Date(today + 'T12:00:00Z');
+  let futCount = 0;
+  for (let i = 0; i < 30 && futCount < 8; i++) {
+    fut.setUTCDate(fut.getUTCDate() + 1);
+    const dow = fut.getUTCDay();
+    if (dow !== 0 && dow !== 6) {
+      days.push(fut.toISOString().slice(0, 10));
+      futCount++;
+    }
+  }
+  return { days, today };
+}
+
+function fcDayLabel(d, today) {
+  const dt = new Date(d + 'T12:00:00Z');
+  const dow = dt.getUTCDay(); // 0=Sun, 6=Sat
+  const isWeekend = dow === 0 || dow === 6;
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dateStr = dt.toLocaleDateString('en-NZ', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+  const label = d === today ? 'Today' : dayNames[dow];
+  return { label, dateStr, isWeekend, isPast: d < today, isToday: d === today };
+}
+
+async function loadForecast() {
+  const el = document.getElementById('fc-content');
+  el.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
+  try {
+    const { days, today } = fcDateRange();
+    const startDate = days[0];
+    const endDate   = days[days.length - 1];
+
+    // Fetch all needed data in parallel
+    const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows] = await Promise.all([
+      sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
+      sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${startDate}` }),
+      sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: `in.(4,8)` }),
+      sbFetch('capacity_machines',      { select: 'seqno,branchno' }),
+      sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
+      sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
+      sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
+      sbFetch('capacity_app_settings',  { select: 'settings', id: 'eq.1' }),
+    ]);
+
+    // Parse shared app settings (capacity app stores blockM3/wastePct and excludedGrades here)
+    const branchSettings = {};
+    let excludedGrades = new Set();
+    if (appSettingsRows.length) {
+      let shared = appSettingsRows[0].settings || {};
+      if (typeof shared === 'string') { try { shared = JSON.parse(shared); } catch(e) { shared = {}; } }
+      const bm = shared.branchMaterial || {};
+      for (const [bn, mat] of Object.entries(bm)) {
+        branchSettings[Number(bn)] = {
+          blockM3:  parseFloat(mat.blockM3)  || 0,
+          wastePct: parseFloat(mat.wastePct) || 0,
+        };
+      }
+      // excludedGrades hides grades from Material Needs page — honour same list here
+      excludedGrades = new Set(shared.excludedGrades || []);
+    }
+
+    // Build lookup: stockcode → { x_grade, x_cubic }
+    const itemMap = {};
+    for (const si of stockItems) {
+      if (si.stockcode) itemMap[si.stockcode] = { x_grade: si.x_grade || '', x_cubic: parseFloat(si.x_cubic) || 0 };
+    }
+
+    // Calculate daily requirement (blocks) per grade per date for Canterbury branches
+    // Mirrors calcRequirementByDay() from the capacity app:
+    //   - Join schedule → sales_lines → stock_items to get cubic demand per job
+    //   - Use job startdate as the demand date (clamp overdue jobs to first day in window)
+    //   - Convert cubic → blocks using branchMaterial settings per branch
+    //   - Combine both Canterbury branches (4 & 8) into one figure
+    const reqByGradeDate = {}; // grade → date → blocks
+
+    const mMap  = Object.fromEntries(machines.map(m => [Number(m.seqno), m]));
+    const slMap = Object.fromEntries(salesLines.map(l => [Number(l.solineid), l]));
+    // itemMap already built above
+
+    // Only consider Canterbury machines
+    const canMachineNos = new Set(
+      machines.filter(m => FC_BRANCHES.includes(Number(m.branchno))).map(m => Number(m.seqno))
+    );
+
+    // For each Canterbury branch, compute req per grade per day, then sum
+    for (const bn of FC_BRANCHES) {
+      const mat      = branchSettings[bn] || {};
+      const blockM3  = parseFloat(mat.blockM3)  || 0;
+      const wasteFac = 1 - ((parseFloat(mat.wastePct) || 0) / 100);
+      if (blockM3 <= 0 || wasteFac <= 0) continue;
+
+      // Branch machines
+      const bnMachines = new Set(machines.filter(m => Number(m.branchno) === bn).map(m => Number(m.seqno)));
+
+      // Filter schedule to this branch's machines, incomplete jobs only
+      const bnJobs = scheduleRows.filter(j =>
+        bnMachines.has(Number(j.machineno)) &&
+        (Number(j.iscomplete) === 0 || Number(j.iscomplete) === 4)
+      );
+
+      // Per-grade: accumulate cubic by day
+      // Jobs whose startdate is before our window are clamped to days[0] (same as effectiveJobDate)
+      for (const j of bnJobs) {
+        const sl = slMap[Number(j.line_seqno)];
+        if (!sl) continue;
+        const st = itemMap[sl.stockcode];
+        if (!st || !st.x_grade || st.x_cubic <= 0) continue;
+        const grade = st.x_grade.trim();
+
+        const outstanding = Number(j.iscomplete) === 4
+          ? Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(j.completeqty) || 0))
+          : Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(sl.sup_quant)  || 0));
+        if (outstanding <= 0) continue;
+
+        const jobCubic = st.x_cubic * outstanding;
+
+        // Map job to a day in our window (clamp overdue to first day)
+        const jobDate = (j.startdate || '').slice(0, 10);
+        const effectiveDate = jobDate < days[0] ? days[0] : (days.includes(jobDate) ? jobDate : null);
+        if (!effectiveDate) continue; // beyond our window — ignore
+
+        // Convert to blocks and accumulate
+        const blocks = jobCubic / (blockM3 * wasteFac);
+        if (!reqByGradeDate[grade]) reqByGradeDate[grade] = {};
+        reqByGradeDate[grade][effectiveDate] = (reqByGradeDate[grade][effectiveDate] || 0) + blocks;
+      }
+    }
+
+    // Helper: get required blocks for a grade on a date
+    function getRequired(grade, date) {
+      return (reqByGradeDate[grade] || {})[date] || 0;
+    }
+
+
+    // Discover all grades active for Canterbury
+    const gradeSet = new Set();
+    [...stockEntries, ...production].forEach(r => { if (r.grade) gradeSet.add(r.grade); });
+    // Also include grades from auto_forecast settings and from requirement data
+    autoSettings.forEach(r => { if (r.block_grade) gradeSet.add(r.block_grade); });
+    Object.keys(reqByGradeDate).forEach(g => gradeSet.add(g));
+    const grades = [...gradeSet].filter(g => !excludedGrades.has(g)).sort();
+
+    if (!grades.length) {
+      el.innerHTML = '<div class="empty">No block stock data found for Canterbury (branches 4 &amp; 8).</div>';
+      return;
+    }
+
+    // Helper: get most recent opening stock entry for branch+grade on or before a date
+    function getOpeningStock(bn, grade, beforeDate) {
+      const entries = stockEntries
+        .filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date <= beforeDate)
+        .sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+      return entries.length ? +entries[0].qty : null;
+    }
+
+    // Helper: get actual production for branch+grade+date
+    function getActual(bn, grade, date) {
+      const p = production.find(p => Number(p.branch_no) === bn && p.grade === grade && p.production_date === date);
+      return p ? +p.qty : null;
+    }
+
+    // Helper: min level for branch+grade
+    function getMinLevel(bn, grade) {
+      const r = autoSettings.find(r => Number(r.branch_no) === bn && r.block_grade === grade);
+      return r ? (+r.min_level || 0) : 0;
+    }
+
+    // Build combined view: for each grade, combine branches 4+8 (they share a factory)
+    // Show running stock balance across the date range
+    let html = '';
+    for (const grade of grades) {
+      // Find latest opening stock across both branches
+      let runningStock = 0;
+      let minLevel = 0;
+      for (const bn of FC_BRANCHES) {
+        const s = getOpeningStock(bn, grade, today);
+        if (s !== null) runningStock += s;
+        minLevel = Math.max(minLevel, getMinLevel(bn, grade));
+      }
+
+      // Pre-walk past days to get stock to today
+      // (use actual production only for past days to arrive at current balance)
+      let balance = runningStock;
+
+      // Build per-day data
+      const dayData = [];
+      for (const d of days) {
+        const { label, dateStr, isWeekend, isPast, isToday } = fcDayLabel(d, today);
+        let produced = 0;
+        for (const bn of FC_BRANCHES) {
+          const actual = getActual(bn, grade, d);
+          if (actual !== null) produced += actual;
+        }
+        // Required = blocks demanded from sales orders; show for today and future
+        const required = (!isPast) ? getRequired(grade, d) : 0;
+        dayData.push({ d, label, dateStr, isWeekend, isPast, isToday, produced, required });
+      }
+
+      // Compute running balance display (will be recomputed below from anchor)
+      let displayBals = [];
+
+      // Today's balance is the opening stock (before today's production)
+      // Re-walk to get correct running balance: stock entries are point-in-time counts
+      // Use stock entry as the anchor at its date, walk forward/backward from there
+      const anchorDate = (() => {
+        // Find most recent stock entry across both branches
+        const allEntries = FC_BRANCHES.flatMap(bn =>
+          stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade)
+        ).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+        return allEntries[0] || null;
+      })();
+
+      // Recompute: start from anchor and walk
+      let anchorStock = 0;
+      let anchorD = null;
+      if (anchorDate) {
+        anchorD = anchorDate.entry_date;
+        // Sum all branches on that anchor date
+        for (const bn of FC_BRANCHES) {
+          const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
+            .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
+          if (e) anchorStock += +e.qty;
+        }
+      }
+
+      // Walk from anchor forward through days
+      displayBals = [];
+      runBal = anchorStock;
+      let anchorIdx = anchorD ? days.indexOf(anchorD) : -1;
+
+      // If anchor is before our window, pre-walk production between anchor and window start
+      if (anchorD && anchorD < days[0]) {
+        // We don't have production data before our startDate fetch, so just use anchorStock as-is
+        runBal = anchorStock;
+        // Add any production between anchor and window start
+        const preBridge = production.filter(p =>
+          FC_BRANCHES.includes(Number(p.branch_no)) &&
+          p.grade === grade &&
+          p.production_date > anchorD &&
+          p.production_date < days[0]
+        );
+        preBridge.forEach(p => { runBal += +p.qty; });
+      } else if (!anchorD) {
+        runBal = 0;
+      }
+
+      // Build balance day by day from anchor:
+      // Stock on hand (from stock entry) is the opening balance for today.
+      // Past days: show stock entry value or walk produced (informational only).
+      // Today + future: opening stock - cumulative required (production is shown separately).
+      {
+        let bal = anchorStock;
+        displayBals = [];
+        let passedAnchor = !anchorD || anchorD < days[0];
+
+        for (let i = 0; i < dayData.length; i++) {
+          const dd = dayData[i];
+          if (anchorD && dd.d === anchorD) { bal = anchorStock; passedAnchor = true; }
+          if (passedAnchor) {
+            if (dd.isPast) {
+              // Past: walk with actual production so balance tracks reality
+              bal += dd.produced;
+            } else {
+              // Today and future: stock on hand minus required (production not yet counted)
+              bal -= dd.required;
+            }
+          }
+          displayBals.push(passedAnchor ? bal : null);
+        }
+      }
+
+      const todayBal = displayBals[dayData.findIndex(d => d.isToday)] ?? null;
+      const stockCls = todayBal === null ? '' : todayBal <= minLevel ? 'critical' : todayBal <= minLevel * 1.5 ? 'low' : '';
+      const stockLabel = todayBal !== null ? `Stock: ${Math.round(todayBal)} blk` : 'Stock: —';
+
+      // Grade colour
+      const gcls = gradeColorClass(grade);
+      const gcv  = gcls ? `var(--gc-${gcls})` : 'var(--accent)';
+
+      // Build column headers
+      const todayIdx = dayData.findIndex(d => d.isToday);
+      let colHtml = '<tr>';
+      colHtml += '<th class="th-grade" style="min-width:52px">Grade</th>';
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        colHtml += `<th class="${cls}" style="min-width:28px;${sep}">
+          <div class="fc-day-head">${dd.label}</div>
+          <div class="fc-day-sub">${dd.dateStr}</div>
+        </th>`;
+      });
+      colHtml += '</tr>';
+
+      // Production row
+      let prodHtml = '<tr>';
+      prodHtml += `<td class="td-label">Produced</td>`;
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        const val = dd.produced > 0 ? `<span class="fc-val-prod">${dd.produced}</span>` : '—';
+        prodHtml += `<td class="${cls}" style="${sep}">${val}</td>`;
+      });
+      prodHtml += '</tr>';
+
+      // Required row (future only — blocks needed from outstanding sales orders)
+      let tmplHtml = '<tr>';
+      tmplHtml += `<td class="td-label">Required</td>`;
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        let val = '—';
+        if (!dd.isPast && dd.required > 0.5) {
+          val = `<span class="fc-val-tmpl">${Math.round(dd.required)}</span>`;
+        }
+        tmplHtml += `<td class="${cls}" style="${sep}">${val}</td>`;
+      });
+      tmplHtml += '</tr>';
+
+      // Running balance row
+      let balHtml = '<tr>';
+      balHtml += `<td class="td-label" style="font-weight:600;color:var(--fg)">Est. Stock</td>`;
+      displayBals.forEach((bal, i) => {
+        const dd = dayData[i];
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        if (bal === null) { balHtml += `<td class="${cls}" style="${sep}">—</td>`; return; }
+        const bRnd = Math.round(bal);
+        const bCls = bRnd <= minLevel ? 'fc-val-bal critical' : bRnd <= minLevel * 1.5 ? 'fc-val-bal low' : 'fc-val-bal ok';
+        balHtml += `<td class="${cls}" style="${sep}"><span class="${bCls}">${bRnd}</span></td>`;
+      });
+      balHtml += '</tr>';
+
+      html += `<div class="fc-grade-block">
+        <div class="fc-grade-head">
+          <span class="fc-grade-name" style="color:${gcv}">${grade}</span>
+          <span class="fc-stock-pill ${stockCls}">${stockLabel}</span>
+          ${minLevel > 0 ? `<span style="font-size:11px;color:var(--muted)">min ${minLevel} blk</span>` : ''}
+        </div>
+        <div class="fc-tbl-wrap">
+          <table class="fc-tbl">
+            <thead>${colHtml}</thead>
+            <tbody>
+              ${prodHtml}
+              ${tmplHtml}
+              ${balHtml}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    }
+
+    el.innerHTML = html
+      ? `<div class="fc-tile-grid">${html}</div>`
+      : '<div class="empty">No grades found.</div>';
+  } catch(e) {
+    document.getElementById('fc-content').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
   }
 }
 
