@@ -1514,9 +1514,9 @@ async function loadForecast() {
 
         const jobCubic = st.x_cubic * outstanding;
 
-        // Map job to a day in our window (clamp overdue to first day)
+        // Map job to a day in our window (clamp overdue/past to today so they show as required)
         const jobDate = (j.startdate || '').slice(0, 10);
-        const effectiveDate = jobDate < days[0] ? days[0] : (days.includes(jobDate) ? jobDate : null);
+        const effectiveDate = jobDate <= today ? today : (days.includes(jobDate) ? jobDate : null);
         if (!effectiveDate) continue; // beyond our window — ignore
 
         // Convert to blocks and accumulate
