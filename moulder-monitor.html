@@ -1432,7 +1432,7 @@ async function loadForecast() {
 
     // Fetch all needed data in parallel
     const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows] = await Promise.all([
-      sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
+      sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,entry_timestamp,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
       sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${startDate}` }),
       sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: `in.(4,8)` }),
       sbFetch('capacity_machines',      { select: 'seqno,branchno' }),
@@ -1565,6 +1565,47 @@ async function loadForecast() {
       return r ? (+r.min_level || 0) : 0;
     }
 
+    // Helper: blocks consumed by completed jobs for a given grade since a stock entry date/timestamp.
+    // Mirrors calcBlockStock() in the capacity app. Returns total blocks used (float).
+    function completedBlocksUsedSince(grade, anchorDateStr, anchorTimestampStr) {
+      const anchorMs = anchorTimestampStr
+        ? new Date(anchorTimestampStr.replace(' ','T').replace(/\+00$/,'+00:00')).getTime()
+        : null;
+      let totalUsedBlocks = 0;
+      for (const bn of FC_BRANCHES) {
+        const mat = branchSettings[bn] || {};
+        const blockM3  = mat.blockM3  || 0;
+        const wasteFac = 1 - ((mat.wastePct || 0) / 100);
+        if (blockM3 === 0 || wasteFac <= 0) continue;
+        let usedCubic = 0;
+        scheduleRows
+          .filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2))
+          .forEach(j => {
+            const m = mMap[Number(j.machineno)];
+            if (!m || Number(m.branchno) !== bn) return;
+            const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
+            const item = itemMap[sl.stockcode];
+            if (!item || (item.x_grade||'').trim() !== grade || !item.x_cubic) return;
+            // Only count jobs completed after the anchor stock entry
+            if (j.completime) {
+              const cts = j.completime.replace(' ','T').replace(/\+00$/,'+00:00');
+              const ctMs = new Date(cts).getTime();
+              if (!isNaN(ctMs)) {
+                if (anchorMs != null ? ctMs <= anchorMs : j.completime.slice(0,10) < anchorDateStr) return;
+              }
+            } else {
+              if ((j.finishdate || '') < anchorDateStr) return;
+            }
+            const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
+              ? parseFloat(sl.sup_quant)
+              : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+            usedCubic += item.x_cubic * Math.max(0, doneQty);
+          });
+        totalUsedBlocks += usedCubic / (blockM3 * wasteFac);
+      }
+      return totalUsedBlocks;
+    }
+
     // Build combined view: for each grade, combine branches 4+8 (they share a factory)
     // Show running stock balance across the date range
     let html = '';
@@ -1613,14 +1654,19 @@ async function loadForecast() {
       // Recompute: start from anchor and walk
       let anchorStock = 0;
       let anchorD = null;
+      let anchorTimestamp = null;
       if (anchorDate) {
         anchorD = anchorDate.entry_date;
+        anchorTimestamp = anchorDate.entry_timestamp || null;
         // Sum all branches on that anchor date
         for (const bn of FC_BRANCHES) {
           const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
             .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
           if (e) anchorStock += +e.qty;
         }
+        // Deduct blocks consumed by completed jobs since the stock entry
+        // (mirrors calcBlockStock in capacity app — keeps forecast in sync)
+        anchorStock -= completedBlocksUsedSince(grade, anchorD, anchorTimestamp);
       }
 
       // Walk from anchor forward through days
@@ -1630,7 +1676,6 @@ async function loadForecast() {
 
       // If anchor is before our window, pre-walk production between anchor and window start
       if (anchorD && anchorD < days[0]) {
-        // We don't have production data before our startDate fetch, so just use anchorStock as-is
         runBal = anchorStock;
         // Add any production between anchor and window start
         const preBridge = production.filter(p =>
@@ -1657,11 +1702,12 @@ async function loadForecast() {
           const dd = dayData[i];
           if (anchorD && dd.d === anchorD) { bal = anchorStock; passedAnchor = true; }
           if (passedAnchor) {
-            if (dd.isPast) {
-              // Past: walk with actual production so balance tracks reality
+            if (dd.isPast || dd.isToday) {
+              // Past + today: add actual production (moulder syncs in real time)
               bal += dd.produced;
-            } else {
-              // Today and future: stock on hand minus required (production not yet counted)
+            }
+            if (!dd.isPast) {
+              // Today + future: deduct required
               bal -= dd.required;
             }
           }
