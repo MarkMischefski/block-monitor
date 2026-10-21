@@ -1531,6 +1531,41 @@ async function loadForecast() {
       return (reqByGradeDate[grade] || {})[date] || 0;
     }
 
+    // Build per-grade per-day used blocks from completed jobs (using completime date)
+    // This powers the "used" figure shown in past day columns of the forecast.
+    const usedByGradeDate = {}; // grade → date → blocks used
+    for (const bn of FC_BRANCHES) {
+      const mat = branchSettings[bn] || {};
+      const blockM3  = mat.blockM3  || 0;
+      const wasteFac = 1 - ((mat.wastePct || 0) / 100);
+      if (blockM3 === 0 || wasteFac <= 0) continue;
+      scheduleRows
+        .filter(j => Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2)
+        .forEach(j => {
+          const m = mMap[Number(j.machineno)];
+          if (!m || Number(m.branchno) !== bn) return;
+          const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
+          const item = itemMap[sl.stockcode];
+          if (!item || !item.x_grade || item.x_cubic <= 0) return;
+          const grade = item.x_grade.trim();
+          // Use completime date (NZT) as the "used on" date, fall back to finishdate
+          const completeDateStr = j.completime
+            ? new Date(j.completime.replace(' ','T').replace(/\+00$/,'+00:00')).toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'})
+            : (j.finishdate || '').slice(0,10);
+          if (!completeDateStr) return;
+          const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
+            ? parseFloat(sl.sup_quant)
+            : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+          const blocks = (item.x_cubic * Math.max(0, doneQty)) / (blockM3 * wasteFac);
+          if (!usedByGradeDate[grade]) usedByGradeDate[grade] = {};
+          usedByGradeDate[grade][completeDateStr] = (usedByGradeDate[grade][completeDateStr] || 0) + blocks;
+        });
+    }
+
+    function getUsed(grade, date) {
+      return (usedByGradeDate[grade] || {})[date] || 0;
+    }
+
 
     // Discover all grades active for Canterbury
     const gradeSet = new Set();
@@ -1658,15 +1693,14 @@ async function loadForecast() {
       if (anchorDate) {
         anchorD = anchorDate.entry_date;
         anchorTimestamp = anchorDate.entry_timestamp || null;
-        // Sum all branches on that anchor date
+        // Sum all branches on that anchor date — raw stock count, no deductions here.
+        // The balance walk deducts getUsed() day-by-day for each past day, so
+        // removing completedBlocksUsedSince() here avoids double-counting.
         for (const bn of FC_BRANCHES) {
           const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
             .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
           if (e) anchorStock += +e.qty;
         }
-        // Deduct blocks consumed by completed jobs since the stock entry
-        // (mirrors calcBlockStock in capacity app — keeps forecast in sync)
-        anchorStock -= completedBlocksUsedSince(grade, anchorD, anchorTimestamp);
       }
 
       // Walk from anchor forward through days
@@ -1685,16 +1719,19 @@ async function loadForecast() {
           p.production_date < days[0]
         );
         preBridge.forEach(p => { runBal += +p.qty; });
+        // Deduct blocks used by completed jobs on those pre-window days
+        // (anchor day itself is excluded — it's the stock count date)
+        const allUsedDates = Object.keys((usedByGradeDate[grade] || {}));
+        allUsedDates.filter(d => d > anchorD && d < days[0]).forEach(d => { runBal -= getUsed(grade, d); });
       } else if (!anchorD) {
         runBal = 0;
       }
 
       // Build balance day by day from anchor:
-      // Stock on hand (from stock entry) is the opening balance for today.
-      // Past days: show stock entry value or walk produced (informational only).
-      // Today + future: opening stock - cumulative required (production is shown separately).
+      // If anchor is before our display window, runBal is the pre-walked opening balance.
+      // If anchor is inside the window, bal resets to anchorStock when we hit that day.
       {
-        let bal = anchorStock;
+        let bal = (!anchorD || anchorD < days[0]) ? runBal : anchorStock;
         displayBals = [];
         let passedAnchor = !anchorD || anchorD < days[0];
 
@@ -1706,8 +1743,11 @@ async function loadForecast() {
               // Past + today: add actual production (moulder syncs in real time)
               bal += dd.produced;
             }
-            if (!dd.isPast) {
-              // Today + future: deduct required
+            if (dd.isPast) {
+              // Past: deduct actual blocks used by completed jobs
+              bal -= getUsed(grade, dd.d);
+            } else {
+              // Today + future: deduct outstanding required
               bal -= dd.required;
             }
           }
@@ -1750,12 +1790,15 @@ async function loadForecast() {
 
       // Required row (future only — blocks needed from outstanding sales orders)
       let tmplHtml = '<tr>';
-      tmplHtml += `<td class="td-label">Required</td>`;
+      tmplHtml += `<td class="td-label">Req / Used</td>`;
       dayData.forEach((dd, i) => {
         const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
         const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
         let val = '—';
-        if (!dd.isPast && dd.required > 0.5) {
+        if (dd.isPast) {
+          const used = getUsed(grade, dd.d);
+          if (used > 0.5) val = `<span class="fc-val-tmpl">${Math.round(used)}</span>`;
+        } else if (dd.required > 0.5) {
           val = `<span class="fc-val-tmpl">${Math.round(dd.required)}</span>`;
         }
         tmplHtml += `<td class="${cls}" style="${sep}">${val}</td>`;
