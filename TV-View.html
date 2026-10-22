@@ -548,23 +548,20 @@ function renderDensity() {
     rbHtml = `<table><thead><tr>
       <th>#</th><th>Recipe</th><th>Label</th><th>Density</th><th>Status</th><th>Weight</th><th>Cycle</th>
     </tr></thead><tbody>`;
-    recent.forEach((b, i) => {
+    recent.forEach(b => {
       const ts = new Date(b.produced_at);
-      // Cycle = time since previous block (next in reversed list = older)
+      // Cycle from real cycle_time_s field
       let cycleStr = '—';
-      const prevBlock = recent[i + 1];
-      if (prevBlock) {
-        const diffS = Math.round((ts - new Date(prevBlock.produced_at)) / 1000);
-        if (diffS > 0 && diffS < 3600) {
-          const mm = Math.floor(diffS / 60), ss = diffS % 60;
-          cycleStr = `${mm}:${String(ss).padStart(2,'0')}`;
-        }
+      if (b.cycle_time_s != null) {
+        const cs = Math.round(+b.cycle_time_s);
+        const mm = Math.floor(cs / 60), ss = cs % 60;
+        cycleStr = `${mm}:${String(ss).padStart(2,'0')}`;
       }
       const gradeObj = gradeMap[b.recipe] || null;
       const gradeStr = gradeObj ? (gradeObj.erp_grade || '') : '';
       const dens = b.blk_density != null ? +b.blk_density : null;
       const status = (dens != null && gradeObj) ? densityStatus(dens, gradeObj) : '';
-      const densStr = dens != null ? dens.toFixed(3) : '—';
+      const densStr = dens != null ? dens.toFixed(1) : '—';
       const gcKey = gradeStr.toLowerCase().replace(/[^a-z]/g,'');
       const gradeColor = gradeStr ? `var(--gc-${gcKey})` : 'var(--muted)';
       const wt = b.blk_weight != null ? (+b.blk_weight).toFixed(1) + ' kg' : '—';
