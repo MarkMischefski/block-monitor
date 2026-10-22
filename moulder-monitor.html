@@ -1431,15 +1431,19 @@ async function loadForecast() {
     const endDate   = days[days.length - 1];
 
     // Fetch all needed data in parallel
-    const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows] = await Promise.all([
+    const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows, prodTemplate, blockAdj, branchLocs, unitTrans] = await Promise.all([
       sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,entry_timestamp,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
-      sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${startDate}` }),
+      sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
       sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: `in.(4,8)` }),
       sbFetch('capacity_machines',      { select: 'seqno,branchno' }),
       sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
       sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
       sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
       sbFetch('capacity_app_settings',  { select: 'settings', id: 'eq.1' }),
+      sbFetch('block_production_template', { select: 'branch_no,grade,day_of_week,qty', branch_no: 'in.(4,8)' }),
+      sbFetch('block_adjustments',         { select: 'branch_no,grade,adjustment_date,qty', branch_no: 'in.(4,8)' }),
+      sbFetch('capacity_branch_locations', { select: 'branch_no,location_no' }),
+      sbFetchAll('unit_stock_trans',        { select: 'transtype,stockcode,location,quantity,posttime,transdate', transtype: 'eq.2', transdate: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
     ]);
 
     // Parse shared app settings (capacity app stores blockM3/wastePct and excludedGrades here)
@@ -1641,24 +1645,51 @@ async function loadForecast() {
       return totalUsedBlocks;
     }
 
+    // --- Template / adjustment / transfer helpers (mirrors TV dashboard logic) ---
+
+    // Build production map: grade → date → total qty across both branches
+    const prodGD = {};
+    for (const p of production) {
+      if (!FC_BRANCHES.includes(Number(p.branch_no))) continue;
+      const g = p.grade; const d = p.production_date;
+      if (!prodGD[g]) prodGD[g] = {};
+      prodGD[g][d] = (prodGD[g][d] || 0) + (p.qty || 0);
+    }
+
+    // Template production: combined across both branches for a grade+dow
+    const getTemplateQty = (grade, dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const dow = (d.getDay() + 6) % 7; // Mon=0…Fri=4
+      let qty = 0;
+      for (const bn of FC_BRANCHES) {
+        const t = prodTemplate.find(
+          t => Number(t.branch_no) === bn && t.grade === grade && t.day_of_week === dow
+        );
+        if (t) qty += (t.qty || 0);
+      }
+      return qty;
+    };
+
+    // Actual production (sum across branches) for a grade+date; null if no records
+    const getActualQty = (grade, dateStr) => {
+      const pMap = prodGD[grade];
+      if (!pMap || !(dateStr in pMap)) return null;
+      return pMap[dateStr];
+    };
+
+    // Branch location map for transfer lookup
+    const locMap = Object.fromEntries((branchLocs || []).map(r => [Number(r.branch_no), Number(r.location_no)]));
+
     // Build combined view: for each grade, combine branches 4+8 (they share a factory)
     // Show running stock balance across the date range
     let html = '';
     for (const grade of grades) {
-      // Find latest opening stock across both branches
-      let runningStock = 0;
       let minLevel = 0;
       for (const bn of FC_BRANCHES) {
-        const s = getOpeningStock(bn, grade, today);
-        if (s !== null) runningStock += s;
         minLevel = Math.max(minLevel, getMinLevel(bn, grade));
       }
 
-      // Pre-walk past days to get stock to today
-      // (use actual production only for past days to arrive at current balance)
-      let balance = runningStock;
-
-      // Build per-day data
+      // Build per-day data (produced = actual for display in produced row)
       const dayData = [];
       for (const d of days) {
         const { label, dateStr, isWeekend, isPast, isToday } = fcDayLabel(d, today);
@@ -1672,30 +1703,21 @@ async function loadForecast() {
         dayData.push({ d, label, dateStr, isWeekend, isPast, isToday, produced, required });
       }
 
-      // Compute running balance display (will be recomputed below from anchor)
-      let displayBals = [];
-
-      // Today's balance is the opening stock (before today's production)
-      // Re-walk to get correct running balance: stock entries are point-in-time counts
-      // Use stock entry as the anchor at its date, walk forward/backward from there
+      // --- Compute openBal: replicate calcBlockStock from anchor to today ---
+      // Find most recent stock entry across both branches
       const anchorDate = (() => {
-        // Find most recent stock entry across both branches
         const allEntries = FC_BRANCHES.flatMap(bn =>
           stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade)
         ).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
         return allEntries[0] || null;
       })();
 
-      // Recompute: start from anchor and walk
-      let anchorStock = 0;
       let anchorD = null;
       let anchorTimestamp = null;
+      let anchorStock = 0;
       if (anchorDate) {
         anchorD = anchorDate.entry_date;
         anchorTimestamp = anchorDate.entry_timestamp || null;
-        // Sum all branches on that anchor date — raw stock count, no deductions here.
-        // The balance walk deducts getUsed() day-by-day for each past day, so
-        // removing completedBlocksUsedSince() here avoids double-counting.
         for (const bn of FC_BRANCHES) {
           const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
             .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
@@ -1703,51 +1725,117 @@ async function loadForecast() {
         }
       }
 
-      // Walk from anchor forward through days
-      displayBals = [];
-      runBal = anchorStock;
-      let anchorIdx = anchorD ? days.indexOf(anchorD) : -1;
+      // Compute adjustments since anchor (needed for openBal)
+      const adjustments = !anchorD ? 0 : (blockAdj || [])
+        .filter(a => FC_BRANCHES.includes(+a.branch_no) && a.grade === grade && a.adjustment_date >= anchorD)
+        .reduce((s, a) => s + (a.qty || 0), 0);
 
-      // If anchor is before our window, pre-walk production between anchor and window start
-      if (anchorD && anchorD < days[0]) {
-        runBal = anchorStock;
-        // Add any production between anchor and window start
-        const preBridge = production.filter(p =>
-          FC_BRANCHES.includes(Number(p.branch_no)) &&
-          p.grade === grade &&
-          p.production_date > anchorD &&
-          p.production_date < days[0]
-        );
-        preBridge.forEach(p => { runBal += +p.qty; });
-        // Deduct blocks used by completed jobs on those pre-window days
-        // (anchor day itself is excluded — it's the stock count date)
-        const allUsedDates = Object.keys((usedByGradeDate[grade] || {}));
-        allUsedDates.filter(d => d > anchorD && d < days[0]).forEach(d => { runBal -= getUsed(grade, d); });
-      } else if (!anchorD) {
-        runBal = 0;
+      // Compute inter-branch transfers since anchor
+      let transferMovement = 0;
+      if (anchorD && unitTrans && unitTrans.length > 0) {
+        const gradeCubicMap = {};
+        Object.values(itemMap).forEach(s => {
+          if ((s.x_grade || '').trim() === grade && s.x_cubic) gradeCubicMap[s.stockcode] = parseFloat(s.x_cubic);
+        });
+        const gradeStockCodes = new Set(Object.keys(gradeCubicMap));
+        for (const bn of FC_BRANCHES) {
+          const locNo = locMap[bn]; if (locNo == null) continue;
+          const { blockM3 = 0, wastePct = 0 } = branchSettings[bn] || {};
+          const wf = 1 - wastePct / 100;
+          if (!blockM3 || wf <= 0) continue;
+          (unitTrans || [])
+            .filter(t => Number(t.transtype) === 2 && gradeStockCodes.has((t.stockcode || '').trim()))
+            .forEach(t => {
+              if (Number(t.location) !== locNo) return;
+              if (t.posttime) {
+                const ts = t.posttime.replace(' ', 'T');
+                if (anchorTimestamp ? ts <= anchorTimestamp : new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }) < anchorD) return;
+              } else if ((t.transdate || '') < anchorD) return;
+              const qty = parseFloat(t.quantity) || 0;
+              const xCubic = gradeCubicMap[(t.stockcode || '').trim()];
+              if (!xCubic) return;
+              const blocks = xCubic * Math.abs(qty) / (blockM3 * wf);
+              transferMovement += qty > 0 ? blocks : -blocks;
+            });
+        }
       }
 
-      // Build balance day by day from anchor:
-      // If anchor is before our display window, runBal is the pre-walked opening balance.
-      // If anchor is inside the window, bal resets to anchorStock when we hit that day.
+      // Timestamp-based used blocks since anchor (reuse existing helper)
+      const totalUsedBlocks = anchorD ? completedBlocksUsedSince(grade, anchorD, anchorTimestamp) : 0;
+
+      // --- Walk anchor→today to get production total (actual OR template, skip weekends) ---
+      let producedToDate = 0;
+      if (anchorD) {
+        for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+          if (dateStr > today) break;
+          const dow = (d.getDay() + 6) % 7;
+          if (dow > 4) continue; // skip weekends
+          const actual = getActualQty(grade, dateStr);
+          if (actual !== null) {
+            producedToDate += actual;
+          } else if (dateStr !== today) {
+            producedToDate += getTemplateQty(grade, dateStr);
+          }
+        }
+      }
+
+      // openBal = balance at START of today (before today's required deducted)
+      const openBal = anchorD
+        ? anchorStock + producedToDate + adjustments - totalUsedBlocks + transferMovement
+        : 0;
+      if (grade.trim() === 'S') {
+        console.log(`[FC debug MM] grade=${JSON.stringify(grade)} anchorD=${anchorD} anchorStock=${anchorStock} producedToDate=${producedToDate} adjustments=${adjustments} totalUsedBlocks=${totalUsedBlocks} transferMovement=${transferMovement} openBal=${openBal}`);
+        console.log(`[FC debug MM] unitTrans.length=${(unitTrans||[]).length} locMap=`, locMap);
+        const gradeCodes = Object.values(itemMap).filter(s => (s.x_grade||'').trim() === grade.trim() && s.x_cubic).map(s => s.stockcode);
+        console.log(`[FC debug MM] grade stockcodes=`, gradeCodes);
+        const matchingTrans = (unitTrans||[]).filter(t => Number(t.transtype)===2 && gradeCodes.includes((t.stockcode||'').trim()));
+        console.log(`[FC debug MM] matching transfers=`, matchingTrans);
+      }
+
+      // --- Forward walk through display window ---
+      // Walk day-by-day. For days BEFORE today (past display columns), we need the
+      // per-day balance. We recompute from anchorStock walking through all days in order.
+      // For past days: actual production + actual used (day-by-day).
+      // For today: production already counted in openBal; deduct required.
+      // For future: template production; deduct required.
+      const displayBals = [];
       {
-        let bal = (!anchorD || anchorD < days[0]) ? runBal : anchorStock;
-        displayBals = [];
+        let bal = anchorD ? anchorStock : 0;
         let passedAnchor = !anchorD || anchorD < days[0];
+
+        // If anchor is before window start, pre-walk to window start
+        if (anchorD && anchorD < days[0]) {
+          for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+            if (dateStr >= days[0]) break;
+            const dow = (d.getDay() + 6) % 7;
+            if (dow > 4) continue;
+            const actual = getActualQty(grade, dateStr);
+            bal += actual !== null ? actual : getTemplateQty(grade, dateStr);
+            bal -= getUsed(grade, dateStr);
+          }
+          // Also add adjustments and transfers that fell in this pre-window period
+          // (already included in openBal which we use for today onward)
+        }
 
         for (let i = 0; i < dayData.length; i++) {
           const dd = dayData[i];
           if (anchorD && dd.d === anchorD) { bal = anchorStock; passedAnchor = true; }
           if (passedAnchor) {
-            if (dd.isPast || dd.isToday) {
-              // Past + today: add actual production (moulder syncs in real time)
-              bal += dd.produced;
-            }
             if (dd.isPast) {
-              // Past: deduct actual blocks used by completed jobs
+              // Past day: add actual (or template) production, deduct used blocks
+              const actual = getActualQty(grade, dd.d);
+              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
               bal -= getUsed(grade, dd.d);
+            } else if (dd.isToday) {
+              // Today: sync bal to openBal (already accounts for all past production/used/adj/transfers)
+              bal = openBal;
+              bal -= dd.required;
             } else {
-              // Today + future: deduct outstanding required
+              // Future day: add template production, deduct required
+              const actual = getActualQty(grade, dd.d);
+              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
               bal -= dd.required;
             }
           }
@@ -1755,9 +1843,11 @@ async function loadForecast() {
         }
       }
 
+      // Stock pill shows start-of-day balance for today (openBal = before today's req)
+      const stockCls = !anchorD ? '' : openBal <= minLevel ? 'critical' : openBal <= minLevel * 1.5 ? 'low' : '';
+      const stockLabel = anchorD ? `Stock: ${Math.round(openBal)} blk` : 'Stock: —';
+
       const todayBal = displayBals[dayData.findIndex(d => d.isToday)] ?? null;
-      const stockCls = todayBal === null ? '' : todayBal <= minLevel ? 'critical' : todayBal <= minLevel * 1.5 ? 'low' : '';
-      const stockLabel = todayBal !== null ? `Stock: ${Math.round(todayBal)} blk` : 'Stock: —';
 
       // Grade colour
       const gcls = gradeColorClass(grade);
