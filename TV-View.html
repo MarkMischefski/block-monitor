@@ -1,0 +1,947 @@
+<title>Block Production Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700;800&display=swap">
+<style>
+:root {
+  --bg:      #f0f2f7;
+  --surf:    #ffffff;
+  --surf2:   #f5f6fa;
+  --border:  #dde1ee;
+  --fg:      #1a1d2e;
+  --muted:   #7a80a0;
+  --muted2:  #a0a8c0;
+  --accent:  #0085ff;
+  --good:    #16a34a;
+  --warn:    #d97706;
+  --danger:  #dc2626;
+  --amber:   #d97706;
+  color-scheme: light;
+  /* grade colours — light */
+  --gc-sl:       #a07800; --gc-sl-bg:    rgba(255,210,0,.18);
+  --gc-s:        #7a4520; --gc-s-bg:     rgba(150,80,30,.13);
+  --gc-m:        #4b5563; --gc-m-bg:     rgba(100,110,125,.12);
+  --gc-h:        #166534; --gc-h-bg:     rgba(22,163,74,.12);
+  --gc-vh:       #b91c1c; --gc-vh-bg:    rgba(220,38,38,.12);
+  --gc-slabx:    #1d4ed8; --gc-slabx-bg: rgba(29,78,216,.12);
+  --gc-blk:      #111827; --gc-blk-bg:   rgba(17,24,39,.10);
+  --ff-head: 'Barlow Condensed', system-ui, sans-serif;
+  --ff-body: 'Barlow', system-ui, sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body { font-family: var(--ff-body); background: var(--bg); color: var(--fg); font-size: 13px; display: flex; flex-direction: column; }
+
+/* header */
+#hdr { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 40px; flex-shrink: 0; background: var(--surf); border-bottom: 1px solid var(--border); }
+.hdr-logo  { font-family: var(--ff-head); font-size: 16px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.hdr-sep   { width: 1px; height: 18px; background: var(--border); }
+.hdr-title { font-family: var(--ff-head); font-size: 13px; font-weight: 600; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
+.hdr-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.hdr-clock { font-family: var(--ff-head); font-size: 22px; font-weight: 700; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.hdr-date  { font-size: 10px; color: var(--muted); }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--good); animation: blink 2s ease-in-out infinite; }
+.pulse.err { background: var(--danger); animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.cfg-btn { font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: var(--surf2); color: var(--muted); cursor: pointer; }
+.cfg-btn:hover { color: var(--fg); border-color: var(--muted2); }
+
+/* config */
+#cfg-panel { display: none; flex-shrink: 0; background: var(--surf); border-bottom: 1px solid var(--border); padding: 7px 16px; gap: 8px; align-items: center; flex-wrap: wrap; }
+#cfg-panel.open { display: flex; }
+#cfg-panel label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+#cfg-panel input { font-size: 11px; background: var(--surf2); border: 1px solid var(--border); color: var(--fg); border-radius: 4px; padding: 3px 8px; width: 290px; margin-left: 4px; }
+#cfg-panel input:focus { outline: none; border-color: var(--accent); }
+.save-btn { font-size: 11px; font-weight: 600; padding: 3px 12px; border-radius: 4px; border: none; background: var(--accent); color: #fff; cursor: pointer; }
+
+/* KPI strip */
+#kpi-strip { display: flex; flex-shrink: 0; background: var(--surf); border-bottom: 1px solid var(--border); }
+.kpi { flex: 1; padding: 7px 14px; border-right: 1px solid var(--border); }
+.kpi:last-child { border-right: none; }
+.kpi-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.kpi-val { font-family: var(--ff-head); font-size: 26px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--fg); }
+.kpi-sub { font-size: 10px; color: var(--muted); }
+.kv-good   { color: var(--good); }
+.kv-warn   { color: var(--warn); }
+.kv-danger { color: var(--danger); }
+
+#err-bar { display: none; flex-shrink: 0; background: rgba(220,38,38,.07); border-bottom: 1px solid rgba(220,38,38,.2); color: var(--danger); font-size: 11px; padding: 5px 16px; }
+
+/* body: two-col */
+#body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+.col-head { font-family: var(--ff-head); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 6px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surf); }
+
+/* ── left: density / recipe cards ── */
+#prod-col { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+#recipe-grid { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-content: start; }
+#recipe-grid::-webkit-scrollbar { width: 4px; }
+#recipe-grid::-webkit-scrollbar-thumb { background: var(--border); }
+
+/* recent blocks panel */
+#recent-blocks { border-top: 1px solid var(--border); padding: 6px 8px; flex-shrink: 0; }
+#recent-blocks .rb-head { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+#recent-blocks table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+#recent-blocks th { font-size: 8px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 0 4px 3px; text-align: left; border-bottom: 1px solid var(--border); }
+#recent-blocks th:nth-child(n+4) { text-align: right; }
+#recent-blocks td { padding: 3px 4px; vertical-align: middle; }
+#recent-blocks td:nth-child(n+4) { text-align: right; }
+#recent-blocks td:first-child { padding-left: 0; }
+#recent-blocks td:last-child { padding-right: 0; }
+#recent-blocks .rb-recipe { font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#recent-blocks .rb-label { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; letter-spacing: .03em; }
+#recent-blocks .rb-dens { font-weight: 700; }
+#recent-blocks .rb-status { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+#recent-blocks .rb-status.ok   { color: var(--good); }
+#recent-blocks .rb-status.high { color: var(--danger); }
+#recent-blocks .rb-status.low  { color: var(--warn); }
+#recent-blocks .rb-dens.ok   { color: var(--good); }
+#recent-blocks .rb-dens.high { color: var(--danger); }
+#recent-blocks .rb-dens.low  { color: var(--warn); }
+#recent-blocks .rb-muted { color: var(--muted); }
+#recent-blocks tr:nth-child(even) td { background: rgba(128,128,128,.04); }
+
+/* recipe card */
+.rc { background: var(--surf); border: 1px solid var(--border); border-radius: 8px; }
+.rc.rc-alert-high { border-color: rgba(220,38,38,.4); }
+.rc.rc-alert-low  { border-color: rgba(217,119,6,.4); }
+.rc-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 8px; border-bottom: 1px solid var(--border); }
+.rc-name { font-family: var(--ff-head); font-size: 15px; font-weight: 700; letter-spacing: .01em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-sub  { font-size: 10px; color: var(--muted); font-family: var(--ff-body); font-weight: 400; }
+.rc-count { font-family: var(--ff-head); font-size: 24px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; flex-shrink: 0; margin-left: 8px; }
+.rc-body { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+/* grade chip */
+.chip-grade { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; letter-spacing: .03em; text-transform: uppercase; }
+.chip-sl    { background: var(--gc-sl-bg);    color: var(--gc-sl); }
+.chip-s     { background: var(--gc-s-bg);     color: var(--gc-s); }
+.chip-m     { background: var(--gc-m-bg);     color: var(--gc-m); }
+.chip-h     { background: var(--gc-h-bg);     color: var(--gc-h); }
+.chip-vh    { background: var(--gc-vh-bg);    color: var(--gc-vh); }
+.chip-slabx { background: var(--gc-slabx-bg); color: var(--gc-slabx); }
+.chip-blk   { background: var(--gc-blk-bg);   color: var(--gc-blk); }
+/* density meter */
+.den-row   { display: flex; align-items: center; gap: 8px; }
+.den-lbl   { font-size: 10px; color: var(--muted); width: 64px; flex-shrink: 0; }
+.meter-wrap { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; position: relative; }
+.meter-fill { height: 100%; border-radius: 3px; background: var(--amber); transition: width .4s; }
+.meter-target { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--fg); opacity: .25; border-radius: 1px; }
+.den-val   { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; width: 58px; text-align: right; flex-shrink: 0; }
+.den-val.ok   { color: var(--good); }
+.den-val.low  { color: var(--warn); }
+.den-val.high { color: var(--danger); }
+/* alert pill */
+.alert-pill { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 10px; letter-spacing: .04em; }
+.alert-pill.high { background: rgba(220,38,38,.1); color: var(--danger); }
+.alert-pill.low  { background: rgba(217,119,6,.1);  color: var(--warn); }
+/* sparkline */
+.spark-wrap { height: 36px; padding: 2px 0; box-sizing: border-box; overflow: visible; }
+svg.spark { width: 100%; height: 100%; overflow: visible; display: block; }
+/* stats footer */
+.rc-stats { display: flex; border-top: 1px solid var(--border); margin-top: 2px; }
+.rc-stat  { flex: 1; padding: 6px 10px; border-right: 1px solid var(--border); }
+.rc-stat:last-child { border-right: none; }
+.rc-stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.rc-stat-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; }
+
+/* ── right: forecast ── */
+#fc-col { display: flex; flex-direction: column; overflow: hidden; }
+#fc-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+#fc-scroll::-webkit-scrollbar { width: 4px; }
+#fc-scroll::-webkit-scrollbar-thumb { background: var(--border); }
+
+.fc-gname { font-family: var(--ff-head); font-size: 14px; font-weight: 800; min-width: 30px; }
+.fc-pill  { font-size: 10px; font-weight: 700; padding: 1px 8px; border-radius: 3px; border: 1px solid; }
+.fc-pill.ok       { background: rgba(22,163,74,.08);  color: var(--good);   border-color: rgba(22,163,74,.2); }
+.fc-pill.low      { background: rgba(217,119,6,.08);  color: var(--warn);   border-color: rgba(217,119,6,.25); }
+.fc-pill.critical { background: rgba(220,38,38,.08);  color: var(--danger); border-color: rgba(220,38,38,.25); }
+.fc-min   { font-size: 9px; color: var(--muted); margin-left: auto; }
+
+.fc-tbl { width: 100%; border-collapse: collapse; font-size: 10px; }
+.fc-main-tbl { table-layout: fixed; }
+.fc-date-header th { font-size: 12px; color: var(--fg); font-weight: 700; padding: 5px 5px 4px; text-align: center; background: var(--bg); border-bottom: 2px solid var(--border); line-height: 1.3; position: sticky; top: 0; z-index: 2; }
+.fc-tbl td { text-align: center; padding: 3px 5px; }
+.td-lbl { text-align: left !important; font-size: 9px; color: var(--muted); padding-left: 8px !important; white-space: nowrap; width: 44px; }
+.fc-today { background: rgba(0,133,255,.04); }
+.fc-date-sub { font-size: 10px; color: var(--muted); font-weight: 500; display: block; }
+/* Grade section rows */
+.fc-grade-row { border-top: 6px solid var(--bg); }
+.fc-grade-head { background: var(--surf2); padding: 4px 8px !important; text-align: left !important; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.fc-tbody tr:last-child td { border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+.fc-sep   { border-left: 2px solid rgba(0,133,255,.35) !important; }
+.v-req  { color: var(--warn); font-weight: 600; }
+.v-bal          { font-weight: 800; font-size: 14px; }
+.v-bal.ok       { color: var(--good); }
+.v-bal.low      { color: var(--warn); }
+.v-bal.critical { color: var(--danger); }
+td.bal-low      { background: rgba(217,119,6,.10) !important; }
+td.bal-critical { background: rgba(220,38,38,.12) !important; }
+
+.spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 20px auto; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ph { color: var(--muted); font-size: 12px; padding: 20px; text-align: center; }
+</style>
+
+<!-- header -->
+<div id="hdr">
+  <div class="hdr-logo">Expol</div>
+  <div class="hdr-sep"></div>
+  <div class="hdr-title">Canterbury Block Production</div>
+  <div class="hdr-right">
+    <div><div class="hdr-clock" id="clock">—</div><div class="hdr-date" id="dateline">—</div></div>
+    <div class="pulse" id="pulse"></div>
+    <button class="cfg-btn" onclick="document.getElementById('cfg-panel').classList.toggle('open')">⚙ Config</button>
+  </div>
+</div>
+
+<div id="cfg-panel">
+  <label>URL</label><input id="i-url" type="text" placeholder="https://xxx.supabase.co">
+  <label>Key</label><input id="i-key" type="password" placeholder="eyJ...">
+  <button class="save-btn" onclick="saveConfig()">Save &amp; Reload</button>
+</div>
+
+<div id="kpi-strip">
+  <div class="kpi"><div class="kpi-lbl">Blocks Today</div><div class="kpi-val" id="k-today">—</div><div class="kpi-sub">all grades</div></div>
+  <div class="kpi"><div class="kpi-lbl">This Week</div><div class="kpi-val" id="k-week">—</div><div class="kpi-sub">Mon–today</div></div>
+  <div class="kpi"><div class="kpi-lbl">Hours Operating</div><div class="kpi-val" id="k-hours">—</div><div class="kpi-sub">Mon–today</div></div>
+  <div class="kpi"><div class="kpi-lbl">Off-Spec Today</div><div class="kpi-val" id="k-offspec">—</div><div class="kpi-sub">density OOB</div></div>
+  <div class="kpi"><div class="kpi-lbl">Stock Alerts</div><div class="kpi-val" id="k-alerts">—</div><div class="kpi-sub">below min level</div></div>
+  <div class="kpi"><div class="kpi-lbl">Updated</div><div class="kpi-val" id="k-upd" style="font-size:18px">—</div><div class="kpi-sub">auto 60s</div></div>
+</div>
+
+<div id="err-bar"></div>
+
+<div id="body">
+  <div id="prod-col">
+    <div class="col-head">Density · Last 7 Days by Recipe</div>
+    <div id="recipe-grid"><div class="spinner"></div></div>
+    <div id="recent-blocks"><div class="rb-head">Recent Blocks</div><div class="rb-body"></div></div>
+  </div>
+  <div id="fc-col">
+    <div class="col-head">Block Stock Forecast — Next 7 Working Days</div>
+    <div id="fc-scroll"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const SB_URL_DEFAULT = 'https://jrpysikxibrbbellroid.supabase.co';
+const SB_KEY_DEFAULT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpycHlzaWt4aWJyYmJlbGxyb2lkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDM0OTksImV4cCI6MjA5NjE3OTQ5OX0.6ffi5GLkjs6qQ3Oqks8c1niu7-yrqrIG5P5aWWSFlN0';
+let SB_URL = SB_URL_DEFAULT, SB_KEY = SB_KEY_DEFAULT;
+const FC_BRANCHES = [4, 8];
+
+function loadConfig() {
+  try { SB_URL = localStorage.getItem('tv_sb_url') || SB_URL_DEFAULT; } catch(e) {}
+  try { SB_KEY = localStorage.getItem('tv_sb_key') || SB_KEY_DEFAULT; } catch(e) {}
+  document.getElementById('i-url').value = SB_URL;
+  document.getElementById('i-key').value = SB_KEY;
+}
+function saveConfig() {
+  SB_URL = document.getElementById('i-url').value.trim().replace(/\/+$/, '');
+  SB_KEY = document.getElementById('i-key').value.trim();
+  try { localStorage.setItem('tv_sb_url', SB_URL); localStorage.setItem('tv_sb_key', SB_KEY); } catch(e) {}
+  document.getElementById('cfg-panel').classList.remove('open');
+  start();
+}
+
+// ── REST ──────────────────────────────────────────────────────────────────────
+function sbH() { return { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' }; }
+async function sbGet(table, params = {}, limit = 5000) {
+  const url = new URL(`${SB_URL}/rest/v1/${table}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  url.searchParams.set('limit', String(limit));
+  const r = await fetch(url, { headers: sbH() });
+  if (!r.ok) throw new Error(`${table}: ${r.status}`);
+  return r.json();
+}
+async function sbGetAll(table, params = {}, pageSize = 1000) {
+  const all = []; let from = 0;
+  while (true) {
+    const url = new URL(`${SB_URL}/rest/v1/${table}`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    url.searchParams.set('limit', String(pageSize));
+    url.searchParams.set('offset', String(from));
+    const r = await fetch(url, { headers: sbH() });
+    if (!r.ok) break;
+    const rows = await r.json();
+    all.push(...rows);
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
+function todayNZ() { return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }); }
+function nzDayStart(d) { return new Date(d + 'T00:00:00+13:00').toISOString(); }
+function addDays(d, n) { const dt = new Date(d + 'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate() + n); return dt.toISOString().slice(0,10); }
+function isWE(d) { const w = new Date(d + 'T12:00:00Z').getUTCDay(); return w === 0 || w === 6; }
+function workDaysFrom(from, count) { const r = []; let d = from; while (r.length < count) { if (!isWE(d)) r.push(d); d = addDays(d,1); } return r; }
+const DNAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+function dl(d) { return DNAMES[new Date(d+'T12:00:00Z').getUTCDay()]; }
+function sd(d) { const dt = new Date(d+'T12:00:00Z'); return `${dt.getUTCDate()}/${dt.getUTCMonth()+1}`; }
+
+// ── Grade colour helpers ───────────────────────────────────────────────────────
+function gradeColorClass(erpGrade) {
+  if (!erpGrade) return '';
+  const g = erpGrade.toUpperCase().trim();
+  if (g.includes('PLAT') || g.includes('BLACK') || g.startsWith('BLK')) return 'blk';
+  if (g.startsWith('SLABX') || g.startsWith('SLAB X')) return 'slabx';
+  if (g.startsWith('VH'))  return 'vh';
+  if (g.startsWith('INS') || g.startsWith('SL')) return 'sl';
+  if (g.startsWith('S'))   return 's';
+  if (g.startsWith('H'))   return 'h';
+  if (g.startsWith('M'))   return 'm';
+  return '';
+}
+function gradeColorVar(erpGrade) {
+  const cls = gradeColorClass(erpGrade);
+  return cls ? `var(--gc-${cls})` : 'var(--accent)';
+}
+
+// ── Density status ────────────────────────────────────────────────────────────
+function densityStatus(density, grade) {
+  if (!grade || grade.target_density == null || density == null) return 'unknown';
+  const diff = density - grade.target_density;
+  if (Math.abs(diff) <= (grade.tol || 1)) return 'ok';
+  return diff > 0 ? 'high' : 'low';
+}
+
+// ── Sparkline — copied from moulder-monitor.html ──────────────────────────────
+function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
+  if (vals.length < 2) return '';
+  const W = 260, H = 34, PAD = 2;
+  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 0.5;
+  const pts = vals.map((v, i) => [
+    PAD + i / (vals.length - 1) * (W - PAD * 2),
+    PAD + (1 - (v - min) / rng) * (H - PAD * 2)
+  ]);
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join('');
+  const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H} L${pts[0][0].toFixed(1)} ${H} Z`;
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const avgStatus = densityStatus(avg, grade);
+  const lineColor = isCurrentRun      ? 'var(--accent)'
+                  : avgStatus === 'high' ? 'var(--danger)'
+                  : avgStatus === 'low'  ? 'var(--warn)'
+                  : avgStatus === 'ok' && gradeColor ? gradeColor
+                  : avgStatus === 'ok'   ? 'var(--good)'
+                  : gradeColor || 'var(--amber)';
+  const fillId = `sg${vals.length}_${Math.round(avg*10)}`;
+  let bandLines = '';
+  if (grade && grade.target_density != null) {
+    const t = grade.target_density, tol = grade.tol || 1;
+    const yTarget = PAD + (1 - (t - min) / rng) * (H - PAD * 2);
+    const yHi     = PAD + (1 - (t + tol - min) / rng) * (H - PAD * 2);
+    const yLo     = PAD + (1 - (t - tol - min) / rng) * (H - PAD * 2);
+    const inRange = y => y >= -2 && y <= H + 2;
+    const bTop = Math.max(0, Math.min(H, inRange(yHi) ? yHi : 0));
+    const bBot = Math.max(0, Math.min(H, inRange(yLo) ? yLo : H));
+    bandLines += `<rect x="0" y="${bTop.toFixed(1)}" width="${W}" height="${(bBot-bTop).toFixed(1)}" fill="var(--good)" opacity=".07"/>`;
+    if (inRange(yTarget)) bandLines += `<line x1="0" y1="${yTarget.toFixed(1)}" x2="${W}" y2="${yTarget.toFixed(1)}" stroke="var(--fg)" stroke-width="1" stroke-dasharray="4,3" opacity=".3" vector-effect="non-scaling-stroke"/>`;
+    if (inRange(yHi)) bandLines += `<line x1="0" y1="${yHi.toFixed(1)}" x2="${W}" y2="${yHi.toFixed(1)}" stroke="var(--danger)" stroke-width="1" stroke-dasharray="2,4" opacity=".5" vector-effect="non-scaling-stroke"/>`;
+    if (inRange(yLo)) bandLines += `<line x1="0" y1="${yLo.toFixed(1)}" x2="${W}" y2="${yLo.toFixed(1)}" stroke="var(--warn)" stroke-width="1" stroke-dasharray="2,4" opacity=".5" vector-effect="non-scaling-stroke"/>`;
+    const yAvg = PAD + (1 - (avg - min) / rng) * (H - PAD * 2);
+    const xAvg = W - PAD;
+    if (yAvg >= 0 && yAvg <= H) bandLines += `<circle cx="${xAvg.toFixed(1)}" cy="${yAvg.toFixed(1)}" r="3" fill="${lineColor}" opacity=".9"/>`;
+  }
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <defs><linearGradient id="${fillId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${lineColor}" stop-opacity=".25"/>
+      <stop offset="100%" stop-color="${lineColor}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${bandLines}
+    <path d="${area}" fill="url(#${fillId})"/>
+    <path d="${line}" fill="none" stroke="${lineColor}" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function tickClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('en-NZ', { timeZone:'Pacific/Auckland', hour:'2-digit', minute:'2-digit', hour12:false });
+  document.getElementById('dateline').textContent = now.toLocaleDateString('en-NZ', { timeZone:'Pacific/Auckland', weekday:'short', day:'numeric', month:'short' });
+}
+setInterval(tickClock, 1000); tickClock();
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let gradeMap = {};   // recipe → { erp_grade, display_name, target_density, tol }
+let stockEntries=[], production=[], autoSettings=[];
+let scheduleRows=[], itemMap={}, slMap={}, mMap={};
+let branchSettings={}, usedByGradeDate={};
+let excludedGrades=new Set(), gradeOrder=[], gradeNames={};
+let dailySummary=[], rawToday=[], rawBlocks=[];
+let blockProductionTemplate=[], blockAdjustments=[], unitStockTrans=[], branchLocations=[];
+let loadTimer;
+
+// ── Grade helpers ─────────────────────────────────────────────────────────────
+function displayGrade(g) { return gradeNames[g] || g; }
+function orderedGrades(grades) {
+  if (!gradeOrder.length) return grades;
+  const orderMap = Object.fromEntries(gradeOrder.map((g, i) => [g, i]));
+  return [...grades].sort((a, b) => {
+    const ai = orderMap[a] ?? Infinity, bi = orderMap[b] ?? Infinity;
+    if (ai !== bi) return ai - bi;
+    return a.localeCompare(b);
+  });
+}
+
+// ── Used blocks (for balance walk) ───────────────────────────────────────────
+function buildUsed() {
+  usedByGradeDate = {};
+  for (const bn of FC_BRANCHES) {
+    const {blockM3=0, wastePct=0} = branchSettings[bn] || {};
+    const wf = 1 - wastePct/100;
+    if (!blockM3 || wf <= 0) continue;
+    scheduleRows.filter(j => Number(j.iscomplete)===1 || Number(j.iscomplete)===2).forEach(j => {
+      const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn) return;
+      const sl = slMap[+j.line_seqno]; if (!sl) return;
+      const it = itemMap[sl.stockcode]; if (!it || !it.x_grade || !(it.x_cubic > 0)) return;
+      const grade = it.x_grade.trim();
+      const ds = j.completime
+        ? new Date(j.completime.replace(' ','T').replace(/\+00$/,'+00:00')).toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'})
+        : (j.finishdate || '').slice(0,10);
+      if (!ds) return;
+      const qty = Number(j.iscomplete)===2 && parseFloat(sl.sup_quant)>0 ? parseFloat(sl.sup_quant) : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+      const blks = (it.x_cubic * Math.max(0,qty)) / (blockM3 * wf);
+      if (!usedByGradeDate[grade]) usedByGradeDate[grade]={};
+      usedByGradeDate[grade][ds] = (usedByGradeDate[grade][ds]||0) + blks;
+    });
+  }
+}
+function getUsed(g,d) { return (usedByGradeDate[g]||{})[d]||0; }
+function getMin(g) { return autoSettings.filter(r=>FC_BRANCHES.includes(+r.branch_no)&&r.block_grade===g).reduce((s,r)=>s+(+r.min_level||0),0); }
+
+// ── Render density cards (left col) ──────────────────────────────────────────
+function renderDensity() {
+  const today = todayNZ();
+  const startDate = addDays(today, -7);
+
+  // Build sparkMap from individual block logs (rawBlocks) — same as moulder-monitor
+  const sparkMap = {};
+  for (const b of rawBlocks) {
+    if (b.blk_density == null) continue;
+    if (!sparkMap[b.recipe]) sparkMap[b.recipe] = [];
+    sparkMap[b.recipe].push(+b.blk_density);
+  }
+
+  // Build recipe summaries from block_moulder_daily
+  // Group by recipe, aggregate blocks_produced, weighted avg_density, avg_weight_kg, avg_cycle_s
+  const recipeSummary = {}; // recipe → { blocks, sumDenWt, sumWt, sumCyc, count }
+  dailySummary.forEach(r => {
+    if (!recipeSummary[r.recipe]) recipeSummary[r.recipe] = { blocks:0, sumDenWt:0, sumWt:0, wBlocks:0, sumCyc:0, cycCount:0 };
+    const s = recipeSummary[r.recipe];
+    const blk = +r.blocks_produced || 0;
+    s.blocks += blk;
+    if (r.avg_density != null && blk > 0) { s.sumDenWt += r.avg_density * blk; s.wBlocks += blk; }
+    if (r.avg_weight_kg != null) { s.sumWt += +r.avg_weight_kg; s.cycCount++; }
+    if (r.avg_cycle_s != null)   { s.sumCyc += +r.avg_cycle_s; }
+  });
+
+  // Today's totals
+  const todayRows = dailySummary.filter(r => r.production_date === today);
+  const todayTotal = todayRows.reduce((s,r)=>s+(+r.blocks_produced||0),0);
+  const dow = new Date(today+'T12:00:00Z').getUTCDay();
+  const monday = addDays(today, -(dow===0?6:dow-1));
+  const weekTotal = dailySummary.filter(r=>r.production_date>=monday&&r.production_date<=today).reduce((s,r)=>s+(+r.blocks_produced||0),0);
+  const todayRecipes = new Set(todayRows.filter(r=>(+r.blocks_produced||0)>0).map(r=>r.recipe));
+  const offspec = rawToday.filter(b => {
+    const g = gradeMap[b.recipe]; if (!g) return false;
+    return densityStatus(b.blk_density, g) !== 'ok';
+  }).length;
+
+  // Hours operating this week = sum(blocks_produced × avg_cycle_s) / 3600
+  const weekSecs = dailySummary
+    .filter(r => r.production_date >= monday && r.production_date <= today && r.avg_cycle_s != null)
+    .reduce((s, r) => s + (+r.blocks_produced || 0) * (+r.avg_cycle_s), 0);
+  const weekHrs = (weekSecs / 3600).toFixed(1);
+
+  document.getElementById('k-today').textContent = todayTotal || '0';
+  document.getElementById('k-week').textContent  = weekTotal  || '0';
+  document.getElementById('k-hours').textContent = weekHrs || '0';
+  const oe = document.getElementById('k-offspec');
+  oe.textContent = offspec;
+  oe.className = 'kpi-val ' + (offspec===0?'kv-good':offspec<5?'kv-warn':'kv-danger');
+
+  // Filter out recipes whose grade is excluded, then order by gradeOrder
+  const recipes = Object.keys(recipeSummary)
+    .filter(r => {
+      const g = gradeMap[r];
+      return g ? !excludedGrades.has(g.erp_grade) : true;
+    })
+    .sort((a, b) => {
+      const ga = gradeMap[a]?.erp_grade, gb = gradeMap[b]?.erp_grade;
+      const oi = gradeOrder.indexOf(ga ?? ''), oj = gradeOrder.indexOf(gb ?? '');
+      const ai = oi >= 0 ? oi : Infinity, bi = oj >= 0 ? oj : Infinity;
+      if (ai !== bi) return ai - bi;
+      return a.localeCompare(b);
+    });
+  if (!recipes.length) { document.getElementById('recipe-grid').innerHTML='<div class="ph">No production data</div>'; return; }
+
+  // Density range for meters
+  const allDens = recipes.map(r => {
+    const s = recipeSummary[r]; return s.wBlocks ? s.sumDenWt/s.wBlocks : null;
+  }).filter(v=>v!=null);
+  const denMin = allDens.length ? Math.min(...allDens) : 0;
+  const denMax = allDens.length ? Math.max(...allDens) : 1;
+  const denRange = (denMax - denMin) || 0.5;
+
+  const totalBlocks = recipes.reduce((s,r)=>s+(recipeSummary[r].blocks||0),0);
+
+  let html = '';
+  for (const recipe of recipes) {
+    const s = recipeSummary[recipe];
+    const grade = gradeMap[recipe] || null;
+    const avgDen = s.wBlocks ? s.sumDenWt/s.wBlocks : null;
+    const avgWt  = s.cycCount ? s.sumWt/s.cycCount : null;
+    const avgCyc = s.cycCount ? s.sumCyc/s.cycCount : null;
+    const status = densityStatus(avgDen, grade);
+    const denStr = avgDen != null ? avgDen.toFixed(1) : null;
+    const denPct = avgDen != null ? Math.max(0,Math.min(100, Math.round(((avgDen-denMin)/denRange)*100))) : 0;
+    const targetPct = grade && grade.target_density != null
+      ? Math.max(0,Math.min(100, Math.round(((grade.target_density-denMin)/denRange)*100))) : null;
+
+    const gcls = grade ? gradeColorClass(grade.erp_grade) : '';
+    const gcv  = gcls ? `var(--gc-${gcls})` : 'var(--accent)';
+    const cardCls = status==='high'?'rc rc-alert-high':status==='low'?'rc rc-alert-low':'rc';
+    const denValCls = status==='ok'?'den-val ok':status==='high'?'den-val high':status==='low'?'den-val low':'den-val';
+    const alertPill = (status==='high'||status==='low')
+      ? `<span class="alert-pill ${status}">${status==='high'?'▲ HIGH':'▼ LOW'}</span>` : '';
+    const series = sparkMap[recipe] || [];
+    const spark = buildSpark(series, grade, false, gcv);
+    const wt  = avgWt  != null ? avgWt.toFixed(1)  : null;
+    const cyc = avgCyc != null ? (avgCyc/60).toFixed(1) : null;
+
+    html += `<div class="${cardCls}">
+      <div class="rc-head">
+        <div style="min-width:0;flex:1">
+          ${grade ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:1px">
+            <span style="font-family:var(--ff-head);font-size:14px;font-weight:700;color:${gcv}">${grade.display_name||grade.erp_grade}</span>
+            <span class="chip-grade ${gcls?'chip-'+gcls:''}" style="${!gcls?'background:rgba(0,133,255,.1);color:var(--accent)':''}">${grade.erp_grade}</span>
+            ${alertPill}
+          </div>` : `<div style="display:flex;align-items:center;gap:5px">${alertPill}</div>`}
+          <div class="rc-sub" title="${recipe}">${recipe}</div>
+        </div>
+        <div class="rc-count" style="${gcls?`color:${gcv}`:''}">${s.blocks}</div>
+      </div>
+      <div class="rc-body">
+        ${denStr ? `<div class="den-row">
+          <div class="den-lbl">Avg density</div>
+          <div class="meter-wrap">
+            <div class="meter-fill" style="width:${denPct}%;background:${gcls?gcv:'var(--amber)'}"></div>
+            ${targetPct!=null?`<div class="meter-target" style="left:${targetPct}%"></div>`:''}
+          </div>
+          <div class="${denValCls}">${denStr} kg/m³</div>
+        </div>
+        ${grade&&grade.target_density!=null?`<div style="font-size:10px;color:var(--muted)">Target: ${grade.target_density} ±${grade.tol||1} kg/m³</div>`:''}` : ''}
+        ${series.length > 2 ? `<div class="spark-wrap">${spark}</div>` : ''}
+      </div>
+      <div class="rc-stats">
+        <div class="rc-stat"><div class="rc-stat-lbl">Weight</div><div class="rc-stat-val">${wt?wt+' kg':'—'}</div></div>
+        <div class="rc-stat"><div class="rc-stat-lbl">Cycle</div><div class="rc-stat-val">${cyc?cyc+' min':'—'}</div></div>
+        <div class="rc-stat"><div class="rc-stat-lbl">Share</div><div class="rc-stat-val">${Math.round(s.blocks/(totalBlocks||1)*100)}%</div></div>
+      </div>
+    </div>`;
+  }
+  document.getElementById('recipe-grid').innerHTML = html;
+
+  // Recent blocks panel — last 5 blocks (rawBlocks sorted asc, take last 5 reversed)
+  const recentSorted = rawBlocks.filter(b => b.produced_at);
+  const recent = recentSorted.slice(-5).reverse();
+  let rbHtml = '';
+  if (recent.length) {
+    rbHtml = `<table><thead><tr>
+      <th>#</th><th>Recipe</th><th>Label</th><th>Density</th><th>Status</th><th>Weight</th><th>Cycle</th>
+    </tr></thead><tbody>`;
+    recent.forEach((b, i) => {
+      const ts = new Date(b.produced_at);
+      // Cycle = time since previous block (next in reversed list = older)
+      let cycleStr = '—';
+      const prevBlock = recent[i + 1];
+      if (prevBlock) {
+        const diffS = Math.round((ts - new Date(prevBlock.produced_at)) / 1000);
+        if (diffS > 0 && diffS < 3600) {
+          const mm = Math.floor(diffS / 60), ss = diffS % 60;
+          cycleStr = `${mm}:${String(ss).padStart(2,'0')}`;
+        }
+      }
+      const gradeObj = gradeMap[b.recipe] || null;
+      const gradeStr = gradeObj ? (gradeObj.erp_grade || '') : '';
+      const dens = b.blk_density != null ? +b.blk_density : null;
+      const status = (dens != null && gradeObj) ? densityStatus(dens, gradeObj) : '';
+      const densStr = dens != null ? dens.toFixed(3) : '—';
+      const gcKey = gradeStr.toLowerCase().replace(/[^a-z]/g,'');
+      const gradeColor = gradeStr ? `var(--gc-${gcKey})` : 'var(--muted)';
+      const wt = b.blk_weight != null ? (+b.blk_weight).toFixed(1) + ' kg' : '—';
+      const statusLabel = status === 'ok' ? 'OK' : status === 'high' ? 'HIGH' : status === 'low' ? 'LOW' : '—';
+      rbHtml += `<tr>
+        <td class="rb-muted">${b.blk_n != null ? b.blk_n : '—'}</td>
+        <td class="rb-recipe" title="${b.recipe||''}">${b.recipe||'—'}</td>
+        <td><span class="rb-label" style="background:${gradeColor};color:#fff">${gradeStr||'—'}</span></td>
+        <td class="rb-dens ${status}">${densStr}</td>
+        <td class="rb-status ${status}">${statusLabel}</td>
+        <td class="rb-muted">${wt}</td>
+        <td class="rb-muted">${cycleStr}</td>
+      </tr>`;
+    });
+    rbHtml += '</tbody></table>';
+  } else {
+    rbHtml = '<span style="color:var(--muted);font-size:10px">No recent blocks</span>';
+  }
+  const rbBody = document.querySelector('#recent-blocks .rb-body');
+  if (rbBody) rbBody.innerHTML = rbHtml;
+}
+
+// ── Render forecast (right col) ───────────────────────────────────────────────
+function renderForecast() {
+  const today = todayNZ();
+  const fwDays = workDaysFrom(today, 7);  // today + 6 more working days
+
+  // Collect grades from stock entries, production, auto-forecast, and schedule
+  const gradeSet = new Set();
+  stockEntries.forEach(e => gradeSet.add(e.grade));
+  production.forEach(p => { if (FC_BRANCHES.includes(+p.branch_no)) gradeSet.add(p.grade); });
+  autoSettings.forEach(a => gradeSet.add(a.block_grade));
+
+  // Build required blocks by grade/day from outstanding schedule
+  // Mirrors moulder-monitor.html req logic exactly
+  const reqGD = {};
+  for (const bn of FC_BRANCHES) {
+    const {blockM3=0, wastePct=0} = branchSettings[bn]||{};
+    const wasteFac = 1 - wastePct/100;
+    if (blockM3 <= 0 || wasteFac <= 0) continue;
+
+    // Pre-build set of machine seqnos for this branch
+    const bnMachines = new Set(
+      Object.values(mMap).filter(m => Number(m.branchno) === bn).map(m => Number(m.seqno))
+    );
+
+    const bnJobs = scheduleRows.filter(j =>
+      bnMachines.has(Number(j.machineno)) &&
+      (Number(j.iscomplete) === 0 || Number(j.iscomplete) === 4)
+    );
+
+    for (const j of bnJobs) {
+      const sl = slMap[Number(j.line_seqno)]; if (!sl) continue;
+      const st = itemMap[sl.stockcode]; if (!st || !st.x_grade || !(st.x_cubic > 0)) continue;
+      const grade = st.x_grade.trim();
+      gradeSet.add(grade);
+
+      // Outstanding qty: partial jobs (iscomplete=4) deduct already-completed quantity
+      const outstandingQty = Number(j.iscomplete) === 4
+        ? Math.max(0, (parseFloat(sl.ord_quant)||0) - (parseFloat(j.completeqty)||0))
+        : Math.max(0, (parseFloat(sl.ord_quant)||0) - (parseFloat(sl.sup_quant)||0));
+      if (outstandingQty <= 0) continue;
+
+      const jobCubic = st.x_cubic * outstandingQty;
+      const jobDate = (j.startdate || '').slice(0, 10);
+      const eff = jobDate <= today ? today : (fwDays.includes(jobDate) ? jobDate : null);
+      if (!eff) continue;
+
+      const blks = jobCubic / (blockM3 * wasteFac);
+      if (!reqGD[grade]) reqGD[grade] = {};
+      reqGD[grade][eff] = (reqGD[grade][eff]||0) + blks;
+    }
+  }
+
+  const grades = orderedGrades([...gradeSet].filter(g => g && !excludedGrades.has(g)));
+  if (!grades.length) { document.getElementById('fc-scroll').innerHTML='<div class="ph">No forecast data</div>'; return; }
+
+  // Production by grade/day
+  const prodGD = {};
+  production.forEach(p => {
+    if (!FC_BRANCHES.includes(+p.branch_no)) return;
+    if (!prodGD[p.grade]) prodGD[p.grade] = {};
+    prodGD[p.grade][p.production_date] = (prodGD[p.grade][p.production_date]||0) + (+p.qty);
+  });
+
+  // Helpers for anchor-walk (hoisted outside per-grade loop)
+  const getTemplateQty = (grade, dateStr) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = (d.getDay() + 6) % 7; // Mon=0 … Fri=4
+    let qty = 0;
+    for (const bn of FC_BRANCHES) {
+      const t = blockProductionTemplate.find(
+        t => Number(t.branch_no) === bn && t.grade === grade && t.day_of_week === dow
+      );
+      if (t) qty += (t.qty || 0);
+    }
+    return qty;
+  };
+  const getActualQty = (grade, dateStr) => {
+    const pMap = prodGD[grade];
+    if (!pMap || !(dateStr in pMap)) return null;
+    return pMap[dateStr];
+  };
+
+  let alertCount = 0;
+
+  // One table: sticky thead with dates, then per-grade tbody sections
+  let thead = '<thead class="fc-date-header"><tr><th class="td-lbl"></th>';
+  fwDays.forEach((d,i) => {
+    const isT = i===0;
+    thead += `<th class="${isT?'fc-today fc-sep':''}">${dl(d)}<br><span class="fc-date-sub">${sd(d)}</span></th>`;
+  });
+  thead += '</tr></thead>';
+
+  let tbodies = '';
+
+  for (const grade of grades) {
+    const minLevel = getMin(grade);
+    const gEntries = stockEntries.filter(e => FC_BRANCHES.includes(+e.branch_no) && e.grade === grade);
+    const anchor   = gEntries.sort((a,b) => b.entry_date.localeCompare(a.entry_date))[0] || null;
+    const anchorD  = anchor ? anchor.entry_date : null;
+    const rGD = reqGD[grade] || {};
+
+    // Raw anchor stock (sum all entries on anchor date)
+    let anchorStock = 0;
+    if (anchorD) gEntries.filter(e => e.entry_date === anchorD).forEach(e => { anchorStock += +e.qty; });
+    const anchorTimestamp = anchor ? (anchor.entry_timestamp || null) : null;
+
+    // ── Replicate calcBlockStock exactly ───────────────────────────────────────
+    let openBal = 0;
+    if (!anchorD) {
+      openBal = 0;
+    } else {
+      // Walk day by day from anchorD through today, adding actual or template production
+      let produced = 0;
+      for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toLocaleDateString('en-CA', {timeZone: 'Pacific/Auckland'});
+        if (dateStr > today) break;
+        const dow = (d.getDay() + 6) % 7;
+        if (dow > 4) continue; // skip weekends
+        const actual = getActualQty(grade, dateStr);
+        if (actual !== null) {
+          produced += actual;
+        } else if (dateStr !== today) {
+          // No actual entry — use template (but not for today, which may just not be entered yet)
+          produced += getTemplateQty(grade, dateStr);
+        }
+      }
+
+      // Adjustments from anchorD onward
+      const adjustments = blockAdjustments
+        .filter(a => FC_BRANCHES.includes(+a.branch_no) && a.grade === grade && a.adjustment_date >= anchorD)
+        .reduce((s, a) => s + (a.qty || 0), 0);
+
+      // Used blocks: completed jobs after anchor timestamp (matches calcBlockStock)
+      const jobDoneAfterBase = (j) => {
+        if (j.completime) {
+          const ts = j.completime.replace(' ', 'T').replace(/\+00$/, '+00:00');
+          return anchorTimestamp ? ts > anchorTimestamp
+            : new Date(ts).toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}) >= anchorD;
+        }
+        return (j.finishdate || '') >= anchorD;
+      };
+      // Accumulate used blocks per branch (each branch may have different blockM3)
+      let totalUsedBlocks = 0;
+      for (const bn of FC_BRANCHES) {
+        const {blockM3=0, wastePct=0} = branchSettings[bn] || {};
+        const wf = 1 - wastePct/100;
+        if (!blockM3 || wf <= 0) continue;
+        let usedCubic = 0;
+        scheduleRows
+          .filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2) && jobDoneAfterBase(j))
+          .forEach(j => {
+            const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn) return;
+            const sl = slMap[+j.line_seqno]; if (!sl) return;
+            const it = itemMap[sl.stockcode]; if (!it || !it.x_grade || !(it.x_cubic > 0)) return;
+            if (it.x_grade.trim() !== grade) return;
+            const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
+              ? parseFloat(sl.sup_quant)
+              : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+            usedCubic += it.x_cubic * Math.max(0, doneQty);
+          });
+        totalUsedBlocks += usedCubic / (blockM3 * wf);
+      }
+
+      // Inter-branch transfers (TRANSTYPE=2) after anchor
+      let transferMovement = 0;
+      if (unitStockTrans.length > 0) {
+        // Build locNo→branch map for FC branches
+        const locMap = Object.fromEntries(branchLocations.map(r => [Number(r.branch_no), Number(r.location_no)]));
+        // Build stockcode→cubic map for this grade
+        const gradeCubicMap = {};
+        Object.values(itemMap).forEach(s => {
+          if ((s.x_grade||'').trim() === grade && s.x_cubic) gradeCubicMap[s.stockcode] = parseFloat(s.x_cubic);
+        });
+        const gradeStockCodes = new Set(Object.keys(gradeCubicMap));
+        for (const bn of FC_BRANCHES) {
+          const locNo = locMap[bn]; if (locNo == null) continue;
+          const {blockM3=0, wastePct=0} = branchSettings[bn] || {};
+          const wf = 1 - wastePct/100;
+          if (!blockM3 || wf <= 0) continue;
+          unitStockTrans
+            .filter(t => Number(t.transtype) === 2 && gradeStockCodes.has((t.stockcode||'').trim()))
+            .forEach(t => {
+              if (Number(t.location) !== locNo) return;
+              if (t.posttime) {
+                const ts = t.posttime.replace(' ','T');
+                if (anchorTimestamp ? ts <= anchorTimestamp : new Date(ts).toLocaleDateString('en-CA',{timeZone:'Pacific/Auckland'}) < anchorD) return;
+              } else if ((t.transdate||'') < anchorD) return;
+              const qty = parseFloat(t.quantity) || 0;
+              const xCubic = gradeCubicMap[(t.stockcode||'').trim()];
+              if (!xCubic) return;
+              const blocks = xCubic * Math.abs(qty) / (blockM3 * wf);
+              transferMovement += qty > 0 ? blocks : -blocks;
+            });
+        }
+      }
+
+      openBal = anchorStock + produced + adjustments - totalUsedBlocks + transferMovement;
+      if (grade.trim() === 'S') {
+        console.log(`[FC debug TV] grade=${JSON.stringify(grade)} anchorD=${anchorD} anchorStock=${anchorStock} produced=${produced} adjustments=${adjustments} totalUsedBlocks=${totalUsedBlocks} transferMovement=${transferMovement} openBal=${openBal}`);
+      }
+    }
+
+    // Walk forward through fwDays
+    // openBal already includes today's production (from the anchor walk above)
+    // For future days, add template (or actual override) production then deduct req
+    const bals = [];
+    let bal = openBal;
+    for (const d of fwDays) {
+      if (d > today) {
+        // Future: add scheduled/template production
+        const actual = getActualQty(grade, d);
+        bal += actual !== null ? actual : getTemplateQty(grade, d);
+      }
+      bal -= rGD[d] || 0;
+      bals.push(bal);
+    }
+
+    const todayBal = bals[0];
+    const cls = todayBal <= minLevel ? 'critical' : todayBal <= minLevel*1.5 ? 'low' : 'ok';
+    if (cls !== 'ok') alertCount++;
+
+    const col = gradeColorVar(grade);
+    // Show start-of-day stock (openBal = before today's req is consumed)
+    const stockLabel = anchor ? `${Math.round(openBal)} blk` : 'No entry';
+
+    // Grade heading row (spans all columns)
+    const headRow = `<tr class="fc-grade-row">
+      <td class="fc-grade-head" colspan="${fwDays.length + 1}">
+        <span class="fc-gname" style="color:${col}">${displayGrade(grade)}</span><span style="font-size:9px;color:var(--muted);margin-left:4px" title="erp_grade">[${grade}]</span>
+        <span class="fc-pill ${cls}">${stockLabel}</span>
+        ${minLevel>0?`<span class="fc-min">min ${minLevel}</span>`:''}
+      </td>
+    </tr>`;
+
+    let reqRow = '<tr><td class="td-lbl">Req</td>';
+    fwDays.forEach((d,i) => {
+      const isT = i===0; const v = rGD[d] || 0;
+      reqRow += `<td class="${isT?'fc-today':''} ${isT?'fc-sep':''}">${v>0.5?`<span class="v-req">${Math.round(v)}</span>`:'—'}</td>`;
+    });
+    reqRow += '</tr>';
+
+    let balRow = '<tr><td class="td-lbl" style="font-weight:600;color:var(--fg)">Stock</td>';
+    bals.forEach((b,i) => {
+      const isT = i===0; const n = Math.round(b);
+      const status = n<=minLevel?'critical':n<=minLevel*1.5?'low':'ok';
+      const bc = `v-bal ${status}`;
+      balRow += `<td class="${isT?'fc-today':''} ${isT?'fc-sep':''} bal-${status}"><span class="${bc}">${n}</span></td>`;
+    });
+    balRow += '</tr>';
+
+    tbodies += `<tbody class="fc-tbody">${headRow}${reqRow}${balRow}</tbody>`;
+  }
+
+  document.getElementById('fc-scroll').innerHTML = `<table class="fc-tbl fc-main-tbl">${thead}${tbodies}</table>`;
+  const ae = document.getElementById('k-alerts');
+  ae.textContent = alertCount;
+  ae.className = 'kpi-val ' + (alertCount===0?'kv-good':alertCount<3?'kv-warn':'kv-danger');
+}
+
+// ── Load ──────────────────────────────────────────────────────────────────────
+function setPulse(s) { document.getElementById('pulse').className = 'pulse'+(s==='err'?' err':''); }
+function showErr(m) { const e=document.getElementById('err-bar'); e.textContent=m; e.style.display='block'; }
+function hideErr()  { document.getElementById('err-bar').style.display='none'; }
+
+async function refresh() {
+  if (!SB_URL||!SB_KEY) {
+    document.getElementById('recipe-grid').innerHTML='<div class="ph">Enter Supabase URL &amp; key in ⚙ Config</div>';
+    document.getElementById('fc-scroll').innerHTML='<div class="ph">—</div>';
+    return;
+  }
+  hideErr();
+  try {
+    const today = todayNZ();
+    const startDate = addDays(today, -7);
+
+    // Grade map
+    try {
+      const gm = await sbGet('recipe_grade_map', { select:'erp_grade,display_name,recipes,target_density,density_tolerance', active:'eq.true' });
+      gradeMap = {};
+      gm.forEach(r => {
+        (r.recipes || []).forEach(rec => {
+          gradeMap[rec] = { erp_grade: r.erp_grade, display_name: r.display_name||r.erp_grade, target_density: +r.target_density, tol: +r.density_tolerance };
+        });
+      });
+    } catch(e) { gradeMap = {}; }
+
+    // Raw blocks: today for off-spec, past 14 days for sparklines
+    const sparkStart = addDays(today, -14);
+    try { rawToday = await sbGet('block_moulder_log', { select:'recipe,blk_density', produced_at:`gte.${nzDayStart(today)}` }); }
+    catch(e) { rawToday = []; }
+    try { rawBlocks = await sbGet('block_moulder_log', { select:'recipe,blk_density,produced_at,blk_weight,blk_n,cycle_time_s', produced_at:`gte.${nzDayStart(sparkStart)}`, order:'produced_at.asc' }, 5000); }
+    catch(e) { rawBlocks = []; }
+
+    // Daily summary for density cards (14 days)
+    try { dailySummary = await sbGet('block_moulder_daily', { select:'production_date,recipe,blocks_produced,avg_density,avg_weight_kg,avg_cycle_s', production_date:`gte.${sparkStart}`, order:'production_date.asc' }, 2000); }
+    catch(e) { dailySummary = []; console.warn('block_moulder_daily failed:', e); }
+
+    // Main forecast data
+    const [se, prod, auto, machines, salesLines, stockItems, sched, appRows, tmpl, adj, branchLocs, ust] = await Promise.all([
+      sbGet('block_stock_entries',    { select:'branch_no,grade,entry_date,entry_timestamp,qty', branch_no:'in.(4,8)', order:'entry_date.desc' }),
+      sbGet('block_production',       { select:'branch_no,grade,production_date,qty', branch_no:'in.(4,8)', production_date:`gte.${addDays(today,-90)}` }),
+      sbGet('block_auto_forecast',    { select:'branch_no,block_grade,min_level', branch_no:'in.(4,8)' }),
+      sbGet('capacity_machines',      { select:'seqno,branchno' }),
+      sbGetAll('capacity_sales_lines',  { select:'solineid,stockcode,ord_quant,sup_quant', order:'solineid.asc' }),
+      sbGetAll('capacity_stock_items',  { select:'stockcode,x_grade,x_cubic', order:'stockcode.asc' }),
+      sbGetAll('capacity_schedule',     { select:'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete:'in.(0,1,2,4)', order:'startdate.asc' }),
+      sbGet('capacity_app_settings',  { select:'settings' }),
+      sbGet('block_production_template',  { select:'branch_no,grade,day_of_week,qty', branch_no:'in.(4,8)' }),
+      sbGet('block_adjustments',          { select:'branch_no,grade,adjustment_date,qty', branch_no:'in.(4,8)' }),
+      sbGet('capacity_branch_locations',  { select:'branch_no,location_no' }),
+      sbGetAll('unit_stock_trans',        { select:'transtype,stockcode,location,quantity,posttime,transdate', transtype:'eq.2', transdate:`gte.${addDays(today,-90)}` }),
+    ]);
+
+    stockEntries=se; production=prod; autoSettings=auto;
+    blockProductionTemplate=tmpl||[]; blockAdjustments=adj||[];
+    branchLocations=branchLocs||[]; unitStockTrans=ust||[];
+    mMap={}; machines.forEach(m  => { mMap[+m.seqno]      = m; });
+    slMap={}; salesLines.forEach(sl => { slMap[+sl.solineid]  = sl; });
+    itemMap={}; stockItems.forEach(it => { itemMap[it.stockcode] = it; });
+    scheduleRows = sched;
+
+    branchSettings = {};
+    excludedGrades = new Set();
+    gradeOrder = [];
+    gradeNames = {};
+    if (appRows?.[0]?.settings) {
+      let shared = appRows[0].settings;
+      if (typeof shared === 'string') { try { shared = JSON.parse(shared); } catch(e) { shared = {}; } }
+      const bm = shared.branchMaterial || {};
+      for (const [bn, mat] of Object.entries(bm)) {
+        branchSettings[Number(bn)] = { blockM3: parseFloat(mat.blockM3)||0, wastePct: parseFloat(mat.wastePct)||0 };
+      }
+      excludedGrades = new Set(shared.excludedGrades || []);
+      gradeOrder     = shared.gradeOrder  || [];
+      gradeNames     = shared.gradeNames  || {};
+    }
+
+    buildUsed();
+    renderDensity();
+    renderForecast();
+
+    setPulse('ok');
+    document.getElementById('k-upd').textContent = new Date().toLocaleTimeString('en-NZ',{timeZone:'Pacific/Auckland',hour:'2-digit',minute:'2-digit',hour12:false});
+  } catch(e) {
+    console.error(e);
+    setPulse('err');
+    showErr('Load error: ' + e.message);
+  }
+}
+
+function start() {
+  if (loadTimer) clearInterval(loadTimer);
+  refresh();
+  loadTimer = setInterval(refresh, 60000);
+}
+
+loadConfig(); start();
+</script>
