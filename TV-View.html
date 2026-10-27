@@ -389,7 +389,7 @@ function buildUsed() {
     const wf = 1 - wastePct/100;
     if (!blockM3 || wf <= 0) continue;
     scheduleRows.filter(j => Number(j.iscomplete)===1 || Number(j.iscomplete)===2).forEach(j => {
-      const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn) return;
+      const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn || m.block_moulder === false) return;
       const sl = slMap[+j.line_seqno]; if (!sl) return;
       const it = itemMap[sl.stockcode]; if (!it || !it.x_grade || !(it.x_cubic > 0)) return;
       const grade = it.x_grade.trim();
@@ -605,7 +605,7 @@ function renderForecast() {
 
     // Pre-build set of machine seqnos for this branch
     const bnMachines = new Set(
-      Object.values(mMap).filter(m => Number(m.branchno) === bn).map(m => Number(m.seqno))
+      Object.values(mMap).filter(m => Number(m.branchno) === bn && m.block_moulder !== false).map(m => Number(m.seqno))
     );
 
     const bnJobs = scheduleRows.filter(j =>
@@ -735,7 +735,7 @@ function renderForecast() {
         scheduleRows
           .filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2) && jobDoneAfterBase(j))
           .forEach(j => {
-            const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn) return;
+            const m = mMap[+j.machineno]; if (!m || +m.branchno !== bn || m.block_moulder === false) return;
             const sl = slMap[+j.line_seqno]; if (!sl) return;
             const it = itemMap[sl.stockcode]; if (!it || !it.x_grade || !(it.x_cubic > 0)) return;
             if (it.x_grade.trim() !== grade) return;
@@ -886,7 +886,7 @@ async function refresh() {
       sbGet('block_stock_entries',    { select:'branch_no,grade,entry_date,entry_timestamp,qty', branch_no:'in.(4,8)', order:'entry_date.desc' }),
       sbGet('block_production',       { select:'branch_no,grade,production_date,qty', branch_no:'in.(4,8)', production_date:`gte.${addDays(today,-90)}` }),
       sbGet('block_auto_forecast',    { select:'branch_no,block_grade,min_level', branch_no:'in.(4,8)' }),
-      sbGet('capacity_machines',      { select:'seqno,branchno' }),
+      sbGet('capacity_machines',      { select:'seqno,branchno,block_moulder' }),
       sbGetAll('capacity_sales_lines',  { select:'solineid,stockcode,ord_quant,sup_quant', order:'solineid.asc' }),
       sbGetAll('capacity_stock_items',  { select:'stockcode,x_grade,x_cubic', order:'stockcode.asc' }),
       sbGetAll('capacity_schedule',     { select:'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete:'in.(0,1,2,4)', order:'startdate.asc' }),
