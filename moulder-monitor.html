@@ -1435,7 +1435,7 @@ async function loadForecast() {
       sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,entry_timestamp,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
       sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
       sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: `in.(4,8)` }),
-      sbFetch('capacity_machines',      { select: 'seqno,branchno' }),
+      sbFetch('capacity_machines',      { select: 'seqno,branchno,block_moulder' }),
       sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
       sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
       sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
@@ -1483,7 +1483,7 @@ async function loadForecast() {
 
     // Only consider Canterbury machines
     const canMachineNos = new Set(
-      machines.filter(m => FC_BRANCHES.includes(Number(m.branchno))).map(m => Number(m.seqno))
+      machines.filter(m => FC_BRANCHES.includes(Number(m.branchno)) && m.block_moulder !== false).map(m => Number(m.seqno))
     );
 
     // For each Canterbury branch, compute req per grade per day, then sum
@@ -1494,7 +1494,7 @@ async function loadForecast() {
       if (blockM3 <= 0 || wasteFac <= 0) continue;
 
       // Branch machines
-      const bnMachines = new Set(machines.filter(m => Number(m.branchno) === bn).map(m => Number(m.seqno)));
+      const bnMachines = new Set(machines.filter(m => Number(m.branchno) === bn && m.block_moulder !== false).map(m => Number(m.seqno)));
 
       // Filter schedule to this branch's machines, incomplete jobs only
       const bnJobs = scheduleRows.filter(j =>
@@ -1547,7 +1547,7 @@ async function loadForecast() {
         .filter(j => Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2)
         .forEach(j => {
           const m = mMap[Number(j.machineno)];
-          if (!m || Number(m.branchno) !== bn) return;
+          if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
           const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
           const item = itemMap[sl.stockcode];
           if (!item || !item.x_grade || item.x_cubic <= 0) return;
@@ -1621,7 +1621,7 @@ async function loadForecast() {
           .filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2))
           .forEach(j => {
             const m = mMap[Number(j.machineno)];
-            if (!m || Number(m.branchno) !== bn) return;
+            if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
             const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
             const item = itemMap[sl.stockcode];
             if (!item || (item.x_grade||'').trim() !== grade || !item.x_cubic) return;
