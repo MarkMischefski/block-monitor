@@ -303,11 +303,31 @@ function densityStatus(density, grade) {
   return diff > 0 ? 'high' : 'low';
 }
 
-// ── Sparkline — copied from moulder-monitor.html ──────────────────────────────
-function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+// Y-axis is anchored to the tolerance band: upper/lower tol lines sit near
+// the top/bottom edges. Scale only expands if data goes outside tol + margin.
+function buildSpark(vals, grade, gradeColor = null) {
   if (vals.length < 2) return '';
   const W = 260, H = 34, PAD = 2;
-  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 0.5;
+
+  // Determine the Y scale
+  let min, max;
+  if (grade && grade.target_density != null) {
+    const t = grade.target_density, tol = grade.tol || 1;
+    // Anchor: tol band fills ~80% of height, leaving ~10% margin each side
+    const margin = tol * 0.35;
+    min = t - tol - margin;
+    max = t + tol + margin;
+    // Expand if any data point falls outside (clamp with a bit of extra room)
+    const dataMin = Math.min(...vals), dataMax = Math.max(...vals);
+    if (dataMin < min) min = dataMin - margin * 0.5;
+    if (dataMax > max) max = dataMax + margin * 0.5;
+  } else {
+    min = Math.min(...vals);
+    max = Math.max(...vals);
+  }
+  const rng = (max - min) || 0.5;
+
   const pts = vals.map((v, i) => [
     PAD + i / (vals.length - 1) * (W - PAD * 2),
     PAD + (1 - (v - min) / rng) * (H - PAD * 2)
@@ -316,8 +336,7 @@ function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
   const area = line + ` L${pts[pts.length-1][0].toFixed(1)} ${H} L${pts[0][0].toFixed(1)} ${H} Z`;
   const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
   const avgStatus = densityStatus(avg, grade);
-  const lineColor = isCurrentRun      ? 'var(--accent)'
-                  : avgStatus === 'high' ? 'var(--danger)'
+  const lineColor = avgStatus === 'high' ? 'var(--danger)'
                   : avgStatus === 'low'  ? 'var(--warn)'
                   : avgStatus === 'ok' && gradeColor ? gradeColor
                   : avgStatus === 'ok'   ? 'var(--good)'
@@ -503,7 +522,7 @@ function renderDensity() {
     const alertPill = (status==='high'||status==='low')
       ? `<span class="alert-pill ${status}">${status==='high'?'▲ HIGH':'▼ LOW'}</span>` : '';
     const series = sparkMap[recipe] || [];
-    const spark = buildSpark(series, grade, false, gcv);
+    const spark = buildSpark(series, grade, gcv);
     const wt  = avgWt  != null ? avgWt.toFixed(1)  : null;
     const cyc = avgCyc != null ? (avgCyc/60).toFixed(1) : null;
 
@@ -562,8 +581,8 @@ function renderDensity() {
       const dens = b.blk_density != null ? +b.blk_density : null;
       const status = (dens != null && gradeObj) ? densityStatus(dens, gradeObj) : '';
       const densStr = dens != null ? dens.toFixed(1) : '—';
-      const gcKey = gradeStr.toLowerCase().replace(/[^a-z]/g,'');
-      const gradeColor = gradeStr ? `var(--gc-${gcKey})` : 'var(--muted)';
+      const gcKey = gradeColorClass(gradeStr);
+      const gradeColor = gcKey ? `var(--gc-${gcKey})` : 'var(--muted)';
       const wt = b.blk_weight != null ? (+b.blk_weight).toFixed(1) + ' kg' : '—';
       const statusLabel = status === 'ok' ? 'OK' : status === 'high' ? 'HIGH' : status === 'low' ? 'LOW' : '—';
       rbHtml += `<tr>
@@ -781,9 +800,6 @@ function renderForecast() {
       }
 
       openBal = anchorStock + produced + adjustments - totalUsedBlocks + transferMovement;
-      if (grade.trim() === 'S') {
-        console.log(`[FC debug TV] grade=${JSON.stringify(grade)} anchorD=${anchorD} anchorStock=${anchorStock} produced=${produced} adjustments=${adjustments} totalUsedBlocks=${totalUsedBlocks} transferMovement=${transferMovement} openBal=${openBal}`);
-      }
     }
 
     // Walk forward through fwDays
