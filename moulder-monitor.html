@@ -260,7 +260,7 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 /* single compact row */
 .map-row {
   display: grid;
-  grid-template-columns: 90px 110px 1fr 90px 80px auto auto auto;
+  grid-template-columns: 90px 110px 1fr 90px 80px auto auto;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
@@ -286,64 +286,6 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 .stat-bar-fill { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); opacity: .5; transition: height .3s; min-height: 2px; }
 .stat-bar-fill.current { opacity: 1; }
 .stat-bar-lbl { font-size: 8px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-
-/* ── forecast tile grid ── */
-.fc-tile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
-  gap: 12px;
-  align-items: start;
-}
-.fc-grade-block {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px 8px;
-  overflow: hidden;
-  min-width: 0;
-}
-.fc-grade-head {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-bottom: 8px; padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-.fc-grade-name { font-family: var(--ff-head); font-size: 13px; font-weight: 700; letter-spacing: .02em; }
-.fc-stock-pill {
-  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
-  background: rgba(0,133,255,.1); color: var(--accent);
-}
-.fc-stock-pill.low { background: rgba(232,146,10,.12); color: var(--warn); }
-.fc-stock-pill.critical { background: rgba(220,38,38,.12); color: var(--danger); }
-.fc-tbl-wrap { overflow-x: auto; }
-.fc-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
-.fc-tbl th {
-  text-align: center; padding: 4px 3px;
-  font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--muted); background: var(--bg);
-  border-bottom: 1px solid var(--border); white-space: nowrap;
-}
-.fc-tbl th.th-grade { text-align: left; }
-.fc-tbl td {
-  padding: 4px 4px; text-align: center;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-.fc-tbl td.td-label { text-align: left; font-size: 11px; color: var(--muted); padding-left: 4px; white-space: nowrap; }
-.fc-tbl tr:last-child td { border-bottom: none; }
-.fc-col-today { background: rgba(0,133,255,.04); }
-.fc-col-past  { opacity: .65; }
-.fc-val-prod  { color: var(--good); font-weight: 600; }
-.fc-val-tmpl  { color: var(--accent); font-weight: 600; }
-.fc-val-req   { color: var(--fg); }
-.fc-val-bal   { font-weight: 700; }
-.fc-val-bal.ok       { color: var(--good); }
-.fc-val-bal.low      { color: var(--warn); }
-.fc-val-bal.critical { color: var(--danger); }
-.fc-day-head  { font-size: 10px; font-weight: 600; }
-.fc-day-sub   { font-size: 9px; color: var(--muted); }
-.fc-divider th, .fc-divider td { background: var(--bg) !important; opacity: 1 !important; padding: 2px 0 !important; border: none !important; }
-.fc-divider-line { height: 1px; background: var(--border); margin: 0 8px; }
-.fc-section-label { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 4px 8px 0; }
 
 /* ── spinner / empty ── */
 .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
@@ -382,7 +324,6 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 <!-- TABS -->
 <div id="tab-bar">
   <button class="tab active" data-tab="dashboard">Production</button>
-  <button class="tab" data-tab="forecast">Forecast</button>
   <button class="tab" data-tab="mapping">Grade Mapping</button>
 </div>
 
@@ -466,18 +407,6 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
   </main>
 </div>
 
-<!-- ═══════════════════════════ FORECAST PAGE ════════════════════════════════ -->
-<div id="forecast-page" class="page">
-  <div id="fc-wrap" style="padding:16px 20px 40px">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-      <h2 style="font-family:var(--ff-head);font-size:16px;font-weight:700;letter-spacing:.02em;flex:1">Canterbury Block Forecast</h2>
-      <span style="font-size:11px;color:var(--muted)">Branches 4 &amp; 8 · last 5 days + next 14</span>
-      <button class="btn btn-ghost btn-sm" id="btn-fc-refresh">↻ Refresh</button>
-    </div>
-    <div id="fc-content"><div class="loading-cell"><div class="spinner"></div></div></div>
-  </div>
-</div>
-
 <!-- ═════════════════════════ GRADE MAPPING PAGE ════════════════════════════ -->
 <div id="mapping-page" class="page">
   <div id="map-page">
@@ -539,7 +468,6 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   t.classList.add('active');
   document.getElementById(t.dataset.tab + '-page').classList.add('active');
   if (t.dataset.tab === 'mapping' && SB_URL) loadMapping();
-  if (t.dataset.tab === 'forecast' && SB_URL) loadForecast();
 }));
 document.getElementById('btn-map-refresh').addEventListener('click', loadMapping);
 
@@ -578,31 +506,6 @@ async function sbFetch(path, params = {}) {
   return r.json();
 }
 
-// Paginated fetch — use for large tables (sales lines, stock items)
-async function sbFetchAll(path, params = {}, pageSize = 1000) {
-  const all = [];
-  let from = 0;
-  while (true) {
-    const url = new URL(`${SB_URL}/rest/v1/${path}`);
-    for (const [k, v] of Object.entries(params)) {
-      if (Array.isArray(v)) v.forEach(vi => url.searchParams.append(k, vi));
-      else url.searchParams.set(k, v);
-    }
-    const r = await fetch(url, {
-      headers: {
-        apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json',
-        'Range': `${from}-${from + pageSize - 1}`, 'Range-Unit': 'items', 'Prefer': 'count=none'
-      }
-    });
-    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
-    const page = await r.json();
-    all.push(...page);
-    if (page.length < pageSize) break;
-    from += pageSize;
-  }
-  return all;
-}
-
 async function sbPatch(path, id, body) {
   const url = new URL(`${SB_URL}/rest/v1/${path}`);
   url.searchParams.set('id', `eq.${id}`);
@@ -612,104 +515,6 @@ async function sbPatch(path, id, body) {
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
-}
-
-async function sbUpsert(path, rows, onConflict) {
-  const url = new URL(`${SB_URL}/rest/v1/${path}`);
-  if (onConflict) url.searchParams.set('on_conflict', onConflict);
-  const r = await fetch(url, {
-    method: 'POST',
-    headers: {
-      apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-    },
-    body: JSON.stringify(rows)
-  });
-  if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
-}
-
-// Sync today's block_moulder_log counts → block_production, grouped by labelAs grade.
-// Only syncs for today (NZ date) since historical data shouldn't be rewritten.
-const FC_BRANCH_NO = 8; // Canterbury moulder branch
-async function syncProductionFromLog() {
-  try {
-    const today = todayNZ();
-    const dayStartUTC = nzDayStartUTC(today);
-    // Fetch today's blocks
-    const url = new URL(`${SB_URL}/rest/v1/block_moulder_log`);
-    url.searchParams.set('select', 'recipe,blk_density,produced_at');
-    url.searchParams.set('produced_at', `gte.${dayStartUTC}`);
-    url.searchParams.set('limit', '5000');
-    const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
-    if (!r.ok) return;
-    const blocks = await r.json();
-
-    // Count by labelAs grade (resolved via labelAsGrade helper)
-    const countByGrade = {};
-    for (const b of blocks) {
-      const grade = labelAsGrade(b.blk_density, b.recipe);
-      if (!grade) continue;
-      countByGrade[grade] = (countByGrade[grade] || 0) + 1;
-    }
-
-    if (!Object.keys(countByGrade).length) return;
-
-    // Upsert one row per grade into block_production
-    const rows = Object.entries(countByGrade).map(([grade, qty]) => ({
-      branch_no: FC_BRANCH_NO,
-      grade,
-      production_date: today,
-      qty,
-    }));
-
-    await sbUpsert('block_production', rows, 'branch_no,grade,production_date');
-  } catch(e) {
-    console.warn('syncProductionFromLog:', e.message);
-  }
-}
-
-// Returns the ERP grade string that labelAsChip() would suggest (without HTML), or null.
-function labelAsGrade(density, recipe) {
-  if (density == null) return null;
-  const curr = gradeMap[recipe] || null;
-  // If current grade has ignore_label_as, use the current grade as-is (it's a distinct product)
-  if (curr && curr.ignore_label_as) return curr.erp_grade;
-  // Build candidate list (non-ignored grades with a target density)
-  const seen = new Set();
-  const grades = [];
-  for (const g of Object.values(gradeMap)) {
-    if (!seen.has(g.erp_grade) && !g.ignore_label_as && g.target_density != null) {
-      seen.add(g.erp_grade);
-      grades.push(g);
-    }
-  }
-  if (!grades.length) return curr ? curr.erp_grade : null;
-  grades.sort((a, b) => a.target_density - b.target_density);
-
-  // If density falls within current grade's own band, label as current
-  if (curr && curr.target_density != null) {
-    const tol = curr.tol || 1;
-    if (density >= curr.target_density - tol && density <= curr.target_density + tol) {
-      return curr.erp_grade;
-    }
-  }
-
-  // Find best candidate
-  const qualifying = grades.filter(g => {
-    const tol = g.tol || 1;
-    return density >= g.target_density - tol && density <= g.target_density + tol;
-  });
-  if (qualifying.length) {
-    qualifying.sort((a, b) => Math.abs(a.target_density - density) - Math.abs(b.target_density - density));
-    return qualifying[0].erp_grade;
-  }
-  let best = null, bestDist = Infinity;
-  for (const g of grades) {
-    const d = Math.abs(g.target_density - density);
-    if (d < bestDist) { bestDist = d; best = g; }
-  }
-  return best ? best.erp_grade : (curr ? curr.erp_grade : null);
 }
 
 // ── connect ───────────────────────────────────────────────────────────────────
@@ -722,20 +527,19 @@ function connect() {
   clearErr();
   loadAll();
   clearInterval(autoTick);
-  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) { loadDashboard(); syncProductionFromLog(); } }, 5 * 60 * 1000);
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
 }
 
 if (su && sk) {
   SB_URL = su; SB_KEY = sk;
   loadAll();
-  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) { loadDashboard(); syncProductionFromLog(); } }, 5 * 60 * 1000);
+  autoTick = setInterval(() => { if (viewEndDate === todayNZ()) loadDashboard(); }, 5 * 60 * 1000);
 }
 
 async function loadAll() {
   await loadGradeMap();
   loadDashboard();
   loadWeeklyBars();
-  syncProductionFromLog(); // write today's label-as counts → block_production
 }
 
 // ── 4-week KPI bar charts ─────────────────────────────────────────────────────
@@ -819,11 +623,11 @@ function renderBars(id, weeks, valFn, heightFn, fmtFn, danger = false) {
 // ── grade map (cached) ────────────────────────────────────────────────────────
 async function loadGradeMap() {
   try {
-    const rows = await sbFetch('recipe_grade_map', { select: 'erp_grade,display_name,recipes,target_density,density_tolerance,ignore_label_as', active: 'eq.true' });
+    const rows = await sbFetch('recipe_grade_map', { select: 'erp_grade,display_name,recipes,target_density,density_tolerance', active: 'eq.true' });
     gradeMap = {};
     for (const r of rows) {
       for (const recipe of (r.recipes || [])) {
-        gradeMap[recipe] = { erp_grade: r.erp_grade, display_name: r.display_name, target_density: r.target_density, tol: +r.density_tolerance, ignore_label_as: !!r.ignore_label_as };
+        gradeMap[recipe] = { erp_grade: r.erp_grade, display_name: r.display_name, target_density: r.target_density, tol: +r.density_tolerance };
       }
     }
   } catch(e) {
@@ -1131,7 +935,22 @@ async function loadRecipes(startDate) {
 function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
   if (vals.length < 2) return '';
   const W = 260, H = 34, PAD = 2;
-  const min = Math.min(...vals), max = Math.max(...vals), rng = (max - min) || 0.5;
+  // Recipe tile sparks: anchor Y-axis to the tolerance band so hi/lo lines
+  // sit near the top/bottom edges. Current-run sparks auto-scale for detail.
+  let min, max;
+  if (!isCurrentRun && grade && grade.target_density != null) {
+    const t = grade.target_density, tol = grade.tol || 1;
+    const margin = tol * 0.35;
+    min = t - tol - margin;
+    max = t + tol + margin;
+    const dataMin = Math.min(...vals), dataMax = Math.max(...vals);
+    if (dataMin < min) min = dataMin - margin * 0.5;
+    if (dataMax > max) max = dataMax + margin * 0.5;
+  } else {
+    min = Math.min(...vals);
+    max = Math.max(...vals);
+  }
+  const rng = (max - min) || 0.5;
   const pts = vals.map((v, i) => [
     PAD + i / (vals.length - 1) * (W - PAD * 2),
     PAD + (1 - (v - min) / rng) * (H - PAD * 2)
@@ -1195,14 +1014,11 @@ function buildSpark(vals, grade, isCurrentRun = false, gradeColor = null) {
 //   - If target_density > G.target_density → blue (upgrade)
 function labelAsChip(density, currentRecipe) {
   if (density == null) return '—';
-  // Grade flagged as "ignore label as" — never suggest relabelling
-  const curr = gradeMap[currentRecipe] || null;
-  if (curr && curr.ignore_label_as) return `<span class="label-chip" style="background:rgba(107,114,128,.1);color:var(--muted)">${curr.erp_grade}</span>`;
-  // Build sorted grade list from gradeMap values (unique by erp_grade, excluding ignore_label_as grades)
+  // Build sorted grade list from gradeMap values (unique by erp_grade)
   const seen = new Set();
   const grades = [];
   for (const g of Object.values(gradeMap)) {
-    if (!seen.has(g.erp_grade) && !g.ignore_label_as) {
+    if (!seen.has(g.erp_grade)) {
       seen.add(g.erp_grade);
       if (g.target_density != null) grades.push(g);
     }
@@ -1234,14 +1050,6 @@ function labelAsChip(density, currentRecipe) {
   }
 
   if (!suggested) return '—';
-
-  // If density is within the CURRENT recipe's own tolerance band → always show as OK, no relabelling
-  if (current && current.target_density != null) {
-    const tol = current.tol || 1;
-    if (density >= current.target_density - tol && density <= current.target_density + tol) {
-      return `<span class="label-chip label-ok">✓ ${current.erp_grade}</span>`;
-    }
-  }
 
   if (current && suggested.erp_grade === current.erp_grade) {
     return `<span class="label-chip label-ok">✓ ${suggested.erp_grade}</span>`;
@@ -1313,7 +1121,7 @@ async function loadMapping() {
   const grid = document.getElementById('map-grid');
   grid.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
   try {
-    const rows = await sbFetch('recipe_grade_map', { select: 'id,erp_grade,display_name,recipes,target_density,density_tolerance,ignore_label_as,notes', order: 'erp_grade.asc' });
+    const rows = await sbFetch('recipe_grade_map', { select: 'id,erp_grade,display_name,recipes,target_density,density_tolerance,notes', order: 'erp_grade.asc' });
     if (!rows.length) {
       grid.innerHTML = '<div class="empty">No grades found. Run recipe_grade_map.sql in Supabase first.</div>';
       return;
@@ -1337,9 +1145,6 @@ async function loadMapping() {
             <div class="map-field-label">Tol ±</div>
             <input id="ml-${g.id}" type="number" step="0.1" min="0.1" max="10" value="${tol}">
           </div>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Tick to exclude this grade from Label As suggestions — useful for grades with a distinct colour that can't be substituted">
-            <input type="checkbox" id="mi-${g.id}" ${g.ignore_label_as ? 'checked' : ''}> Ignore label
-          </label>
           <span class="map-status" id="ms-${g.id}"></span>
           <button class="btn btn-ghost btn-sm" onclick="saveMapping(${g.id})">Save</button>
         </div>
@@ -1354,18 +1159,15 @@ async function saveMapping(id) {
   const recipesRaw = document.getElementById(`mr-${id}`).value;
   const targetRaw  = document.getElementById(`mt-${id}`).value;
   const tolRaw     = document.getElementById(`ml-${id}`).value;
-  const notesEl      = document.getElementById(`mn-${id}`);
-  const notes        = notesEl ? notesEl.value : null;
-  const ignoreEl     = document.getElementById(`mi-${id}`);
-  const ignoreLabelAs = ignoreEl ? ignoreEl.checked : false;
-  const status       = document.getElementById(`ms-${id}`);
+  const notes      = document.getElementById(`mn-${id}`).value;
+  const status     = document.getElementById(`ms-${id}`);
 
   const recipes = recipesRaw.split(',').map(s => s.trim()).filter(Boolean);
   const target  = targetRaw !== '' ? parseFloat(targetRaw) : null;
   const tol     = tolRaw    !== '' ? parseFloat(tolRaw)    : 1.0;
 
   try {
-    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, ignore_label_as: ignoreLabelAs, notes: notes || null });
+    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, notes: notes || null });
     status.textContent = '✓ Saved';
     status.className = 'map-status saved';
     // Refresh grade map cache
@@ -1374,565 +1176,6 @@ async function saveMapping(id) {
   } catch (e) {
     status.textContent = '✗ ' + e.message.slice(0, 60);
     status.className = 'map-status error';
-  }
-}
-
-// ── forecast ──────────────────────────────────────────────────────────────────
-document.getElementById('btn-fc-refresh').addEventListener('click', loadForecast);
-
-// Canterbury branch numbers
-const FC_BRANCHES = [4, 8];
-
-function fcDateRange() {
-  // Returns array of working-day date strings: 3 prior working days + today + 8 future working days
-  // Weekends are excluded entirely
-  const today = todayNZ();
-  const days = [];
-  // Past: walk back to find 3 working days
-  const pastDays = [];
-  const cur = new Date(today + 'T12:00:00Z');
-  for (let i = 0; i < 30 && pastDays.length < 3; i++) {
-    cur.setUTCDate(cur.getUTCDate() - 1);
-    const dow = cur.getUTCDay();
-    if (dow !== 0 && dow !== 6) pastDays.unshift(cur.toISOString().slice(0, 10));
-  }
-  days.push(...pastDays);
-  days.push(today);
-  // Future: 8 working days from tomorrow
-  const fut = new Date(today + 'T12:00:00Z');
-  let futCount = 0;
-  for (let i = 0; i < 30 && futCount < 8; i++) {
-    fut.setUTCDate(fut.getUTCDate() + 1);
-    const dow = fut.getUTCDay();
-    if (dow !== 0 && dow !== 6) {
-      days.push(fut.toISOString().slice(0, 10));
-      futCount++;
-    }
-  }
-  return { days, today };
-}
-
-function fcDayLabel(d, today) {
-  const dt = new Date(d + 'T12:00:00Z');
-  const dow = dt.getUTCDay(); // 0=Sun, 6=Sat
-  const isWeekend = dow === 0 || dow === 6;
-  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const dateStr = dt.toLocaleDateString('en-NZ', { timeZone: 'UTC', day: 'numeric', month: 'short' });
-  const label = d === today ? 'Today' : dayNames[dow];
-  return { label, dateStr, isWeekend, isPast: d < today, isToday: d === today };
-}
-
-async function loadForecast() {
-  const el = document.getElementById('fc-content');
-  el.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
-  try {
-    const { days, today } = fcDateRange();
-    const startDate = days[0];
-    const endDate   = days[days.length - 1];
-
-    // Fetch all needed data in parallel
-    const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows, prodTemplate, blockAdj, branchLocs, unitTrans] = await Promise.all([
-      sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,entry_timestamp,qty', branch_no: `in.(4,8)`, order: 'entry_date.desc' }),
-      sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: `in.(4,8)`, production_date: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
-      sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: `in.(4,8)` }),
-      sbFetch('capacity_machines',      { select: 'seqno,branchno,block_moulder' }),
-      sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
-      sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
-      sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
-      sbFetch('capacity_app_settings',  { select: 'settings', id: 'eq.1' }),
-      sbFetch('block_production_template', { select: 'branch_no,grade,day_of_week,qty', branch_no: 'in.(4,8)' }),
-      sbFetch('block_adjustments',         { select: 'branch_no,grade,adjustment_date,qty', branch_no: 'in.(4,8)' }),
-      sbFetch('capacity_branch_locations', { select: 'branch_no,location_no' }),
-      sbFetchAll('unit_stock_trans',        { select: 'transtype,stockcode,location,quantity,posttime,transdate', transtype: 'eq.2', transdate: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
-    ]);
-
-    // Parse shared app settings (capacity app stores blockM3/wastePct and excludedGrades here)
-    const branchSettings = {};
-    let excludedGrades = new Set();
-    if (appSettingsRows.length) {
-      let shared = appSettingsRows[0].settings || {};
-      if (typeof shared === 'string') { try { shared = JSON.parse(shared); } catch(e) { shared = {}; } }
-      const bm = shared.branchMaterial || {};
-      for (const [bn, mat] of Object.entries(bm)) {
-        branchSettings[Number(bn)] = {
-          blockM3:  parseFloat(mat.blockM3)  || 0,
-          wastePct: parseFloat(mat.wastePct) || 0,
-        };
-      }
-      // excludedGrades hides grades from Material Needs page — honour same list here
-      excludedGrades = new Set(shared.excludedGrades || []);
-    }
-
-    // Build lookup: stockcode → { x_grade, x_cubic }
-    const itemMap = {};
-    for (const si of stockItems) {
-      if (si.stockcode) itemMap[si.stockcode] = { x_grade: si.x_grade || '', x_cubic: parseFloat(si.x_cubic) || 0 };
-    }
-
-    // Calculate daily requirement (blocks) per grade per date for Canterbury branches
-    // Mirrors calcRequirementByDay() from the capacity app:
-    //   - Join schedule → sales_lines → stock_items to get cubic demand per job
-    //   - Use job startdate as the demand date (clamp overdue jobs to first day in window)
-    //   - Convert cubic → blocks using branchMaterial settings per branch
-    //   - Combine both Canterbury branches (4 & 8) into one figure
-    const reqByGradeDate = {}; // grade → date → blocks
-
-    const mMap  = Object.fromEntries(machines.map(m => [Number(m.seqno), m]));
-    const slMap = Object.fromEntries(salesLines.map(l => [Number(l.solineid), l]));
-    // itemMap already built above
-
-    // Only consider Canterbury machines
-    const canMachineNos = new Set(
-      machines.filter(m => FC_BRANCHES.includes(Number(m.branchno)) && m.block_moulder !== false).map(m => Number(m.seqno))
-    );
-
-    // For each Canterbury branch, compute req per grade per day, then sum
-    for (const bn of FC_BRANCHES) {
-      const mat      = branchSettings[bn] || {};
-      const blockM3  = parseFloat(mat.blockM3)  || 0;
-      const wasteFac = 1 - ((parseFloat(mat.wastePct) || 0) / 100);
-      if (blockM3 <= 0 || wasteFac <= 0) continue;
-
-      // Branch machines
-      const bnMachines = new Set(machines.filter(m => Number(m.branchno) === bn && m.block_moulder !== false).map(m => Number(m.seqno)));
-
-      // Filter schedule to this branch's machines, incomplete jobs only
-      const bnJobs = scheduleRows.filter(j =>
-        bnMachines.has(Number(j.machineno)) &&
-        (Number(j.iscomplete) === 0 || Number(j.iscomplete) === 4)
-      );
-
-      // Per-grade: accumulate cubic by day
-      // Jobs whose startdate is before our window are clamped to days[0] (same as effectiveJobDate)
-      for (const j of bnJobs) {
-        const sl = slMap[Number(j.line_seqno)];
-        if (!sl) continue;
-        const st = itemMap[sl.stockcode];
-        if (!st || !st.x_grade || st.x_cubic <= 0) continue;
-        const grade = st.x_grade.trim();
-
-        const outstanding = Number(j.iscomplete) === 4
-          ? Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(j.completeqty) || 0))
-          : Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(sl.sup_quant)  || 0));
-        if (outstanding <= 0) continue;
-
-        const jobCubic = st.x_cubic * outstanding;
-
-        // Map job to a day in our window (clamp overdue/past to today so they show as required)
-        const jobDate = (j.startdate || '').slice(0, 10);
-        const effectiveDate = jobDate <= today ? today : (days.includes(jobDate) ? jobDate : null);
-        if (!effectiveDate) continue; // beyond our window — ignore
-
-        // Convert to blocks and accumulate
-        const blocks = jobCubic / (blockM3 * wasteFac);
-        if (!reqByGradeDate[grade]) reqByGradeDate[grade] = {};
-        reqByGradeDate[grade][effectiveDate] = (reqByGradeDate[grade][effectiveDate] || 0) + blocks;
-      }
-    }
-
-    // Helper: get required blocks for a grade on a date
-    function getRequired(grade, date) {
-      return (reqByGradeDate[grade] || {})[date] || 0;
-    }
-
-    // Build per-grade per-day used blocks from completed jobs (using completime date)
-    // This powers the "used" figure shown in past day columns of the forecast.
-    const usedByGradeDate = {}; // grade → date → blocks used
-    for (const bn of FC_BRANCHES) {
-      const mat = branchSettings[bn] || {};
-      const blockM3  = mat.blockM3  || 0;
-      const wasteFac = 1 - ((mat.wastePct || 0) / 100);
-      if (blockM3 === 0 || wasteFac <= 0) continue;
-      scheduleRows
-        .filter(j => Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2)
-        .forEach(j => {
-          const m = mMap[Number(j.machineno)];
-          if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
-          const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
-          const item = itemMap[sl.stockcode];
-          if (!item || !item.x_grade || item.x_cubic <= 0) return;
-          const grade = item.x_grade.trim();
-          // Use completime date (NZT) as the "used on" date, fall back to finishdate
-          const completeDateStr = j.completime
-            ? new Date(j.completime.replace(' ','T').replace(/\+00$/,'+00:00')).toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'})
-            : (j.finishdate || '').slice(0,10);
-          if (!completeDateStr) return;
-          const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
-            ? parseFloat(sl.sup_quant)
-            : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
-          const blocks = (item.x_cubic * Math.max(0, doneQty)) / (blockM3 * wasteFac);
-          if (!usedByGradeDate[grade]) usedByGradeDate[grade] = {};
-          usedByGradeDate[grade][completeDateStr] = (usedByGradeDate[grade][completeDateStr] || 0) + blocks;
-        });
-    }
-
-    function getUsed(grade, date) {
-      return (usedByGradeDate[grade] || {})[date] || 0;
-    }
-
-
-    // Discover all grades active for Canterbury
-    const gradeSet = new Set();
-    [...stockEntries, ...production].forEach(r => { if (r.grade) gradeSet.add(r.grade); });
-    // Also include grades from auto_forecast settings and from requirement data
-    autoSettings.forEach(r => { if (r.block_grade) gradeSet.add(r.block_grade); });
-    Object.keys(reqByGradeDate).forEach(g => gradeSet.add(g));
-    const grades = [...gradeSet].filter(g => !excludedGrades.has(g)).sort();
-
-    if (!grades.length) {
-      el.innerHTML = '<div class="empty">No block stock data found for Canterbury (branches 4 &amp; 8).</div>';
-      return;
-    }
-
-    // Helper: get most recent opening stock entry for branch+grade on or before a date
-    function getOpeningStock(bn, grade, beforeDate) {
-      const entries = stockEntries
-        .filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date <= beforeDate)
-        .sort((a, b) => b.entry_date.localeCompare(a.entry_date));
-      return entries.length ? +entries[0].qty : null;
-    }
-
-    // Helper: get actual production for branch+grade+date
-    function getActual(bn, grade, date) {
-      const p = production.find(p => Number(p.branch_no) === bn && p.grade === grade && p.production_date === date);
-      return p ? +p.qty : null;
-    }
-
-    // Helper: min level for branch+grade
-    function getMinLevel(bn, grade) {
-      const r = autoSettings.find(r => Number(r.branch_no) === bn && r.block_grade === grade);
-      return r ? (+r.min_level || 0) : 0;
-    }
-
-    // Helper: blocks consumed by completed jobs for a given grade since a stock entry date/timestamp.
-    // Mirrors calcBlockStock() in the capacity app. Returns total blocks used (float).
-    function completedBlocksUsedSince(grade, anchorDateStr, anchorTimestampStr) {
-      const anchorMs = anchorTimestampStr
-        ? new Date(anchorTimestampStr.replace(' ','T').replace(/\+00$/,'+00:00')).getTime()
-        : null;
-      let totalUsedBlocks = 0;
-      for (const bn of FC_BRANCHES) {
-        const mat = branchSettings[bn] || {};
-        const blockM3  = mat.blockM3  || 0;
-        const wasteFac = 1 - ((mat.wastePct || 0) / 100);
-        if (blockM3 === 0 || wasteFac <= 0) continue;
-        let usedCubic = 0;
-        scheduleRows
-          .filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2))
-          .forEach(j => {
-            const m = mMap[Number(j.machineno)];
-            if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
-            const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
-            const item = itemMap[sl.stockcode];
-            if (!item || (item.x_grade||'').trim() !== grade || !item.x_cubic) return;
-            // Only count jobs completed after the anchor stock entry
-            if (j.completime) {
-              const cts = j.completime.replace(' ','T').replace(/\+00$/,'+00:00');
-              const ctMs = new Date(cts).getTime();
-              if (!isNaN(ctMs)) {
-                if (anchorMs != null ? ctMs <= anchorMs : j.completime.slice(0,10) < anchorDateStr) return;
-              }
-            } else {
-              if ((j.finishdate || '') < anchorDateStr) return;
-            }
-            const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
-              ? parseFloat(sl.sup_quant)
-              : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
-            usedCubic += item.x_cubic * Math.max(0, doneQty);
-          });
-        totalUsedBlocks += usedCubic / (blockM3 * wasteFac);
-      }
-      return totalUsedBlocks;
-    }
-
-    // --- Template / adjustment / transfer helpers (mirrors TV dashboard logic) ---
-
-    // Build production map: grade → date → total qty across both branches
-    const prodGD = {};
-    for (const p of production) {
-      if (!FC_BRANCHES.includes(Number(p.branch_no))) continue;
-      const g = p.grade; const d = p.production_date;
-      if (!prodGD[g]) prodGD[g] = {};
-      prodGD[g][d] = (prodGD[g][d] || 0) + (p.qty || 0);
-    }
-
-    // Template production: combined across both branches for a grade+dow
-    const getTemplateQty = (grade, dateStr) => {
-      const d = new Date(dateStr + 'T00:00:00');
-      const dow = (d.getDay() + 6) % 7; // Mon=0…Fri=4
-      let qty = 0;
-      for (const bn of FC_BRANCHES) {
-        const t = prodTemplate.find(
-          t => Number(t.branch_no) === bn && t.grade === grade && t.day_of_week === dow
-        );
-        if (t) qty += (t.qty || 0);
-      }
-      return qty;
-    };
-
-    // Actual production (sum across branches) for a grade+date; null if no records
-    const getActualQty = (grade, dateStr) => {
-      const pMap = prodGD[grade];
-      if (!pMap || !(dateStr in pMap)) return null;
-      return pMap[dateStr];
-    };
-
-    // Branch location map for transfer lookup
-    const locMap = Object.fromEntries((branchLocs || []).map(r => [Number(r.branch_no), Number(r.location_no)]));
-
-    // Build combined view: for each grade, combine branches 4+8 (they share a factory)
-    // Show running stock balance across the date range
-    let html = '';
-    for (const grade of grades) {
-      let minLevel = 0;
-      for (const bn of FC_BRANCHES) {
-        minLevel = Math.max(minLevel, getMinLevel(bn, grade));
-      }
-
-      // Build per-day data (produced = actual for display in produced row)
-      const dayData = [];
-      for (const d of days) {
-        const { label, dateStr, isWeekend, isPast, isToday } = fcDayLabel(d, today);
-        let produced = 0;
-        for (const bn of FC_BRANCHES) {
-          const actual = getActual(bn, grade, d);
-          if (actual !== null) produced += actual;
-        }
-        // Required = blocks demanded from sales orders; show for today and future
-        const required = (!isPast) ? getRequired(grade, d) : 0;
-        dayData.push({ d, label, dateStr, isWeekend, isPast, isToday, produced, required });
-      }
-
-      // --- Compute openBal: replicate calcBlockStock from anchor to today ---
-      // Find most recent stock entry across both branches
-      const anchorDate = (() => {
-        const allEntries = FC_BRANCHES.flatMap(bn =>
-          stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade)
-        ).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
-        return allEntries[0] || null;
-      })();
-
-      let anchorD = null;
-      let anchorTimestamp = null;
-      let anchorStock = 0;
-      if (anchorDate) {
-        anchorD = anchorDate.entry_date;
-        anchorTimestamp = anchorDate.entry_timestamp || null;
-        for (const bn of FC_BRANCHES) {
-          const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
-            .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
-          if (e) anchorStock += +e.qty;
-        }
-      }
-
-      // Compute adjustments since anchor (needed for openBal)
-      const adjustments = !anchorD ? 0 : (blockAdj || [])
-        .filter(a => FC_BRANCHES.includes(+a.branch_no) && a.grade === grade && a.adjustment_date >= anchorD)
-        .reduce((s, a) => s + (a.qty || 0), 0);
-
-      // Compute inter-branch transfers since anchor
-      let transferMovement = 0;
-      if (anchorD && unitTrans && unitTrans.length > 0) {
-        const gradeCubicMap = {};
-        Object.values(itemMap).forEach(s => {
-          if ((s.x_grade || '').trim() === grade && s.x_cubic) gradeCubicMap[s.stockcode] = parseFloat(s.x_cubic);
-        });
-        const gradeStockCodes = new Set(Object.keys(gradeCubicMap));
-        for (const bn of FC_BRANCHES) {
-          const locNo = locMap[bn]; if (locNo == null) continue;
-          const { blockM3 = 0, wastePct = 0 } = branchSettings[bn] || {};
-          const wf = 1 - wastePct / 100;
-          if (!blockM3 || wf <= 0) continue;
-          (unitTrans || [])
-            .filter(t => Number(t.transtype) === 2 && gradeStockCodes.has((t.stockcode || '').trim()))
-            .forEach(t => {
-              if (Number(t.location) !== locNo) return;
-              if (t.posttime) {
-                const ts = t.posttime.replace(' ', 'T');
-                if (anchorTimestamp ? ts <= anchorTimestamp : new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }) < anchorD) return;
-              } else if ((t.transdate || '') < anchorD) return;
-              const qty = parseFloat(t.quantity) || 0;
-              const xCubic = gradeCubicMap[(t.stockcode || '').trim()];
-              if (!xCubic) return;
-              const blocks = xCubic * Math.abs(qty) / (blockM3 * wf);
-              transferMovement += qty > 0 ? blocks : -blocks;
-            });
-        }
-      }
-
-      // Timestamp-based used blocks since anchor (reuse existing helper)
-      const totalUsedBlocks = anchorD ? completedBlocksUsedSince(grade, anchorD, anchorTimestamp) : 0;
-
-      // --- Walk anchor→today to get production total (actual OR template, skip weekends) ---
-      let producedToDate = 0;
-      if (anchorD) {
-        for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
-          if (dateStr > today) break;
-          const dow = (d.getDay() + 6) % 7;
-          if (dow > 4) continue; // skip weekends
-          const actual = getActualQty(grade, dateStr);
-          if (actual !== null) {
-            producedToDate += actual;
-          } else if (dateStr !== today) {
-            producedToDate += getTemplateQty(grade, dateStr);
-          }
-        }
-      }
-
-      // openBal = balance at START of today (before today's required deducted)
-      const openBal = anchorD
-        ? anchorStock + producedToDate + adjustments - totalUsedBlocks + transferMovement
-        : 0;
-      if (grade.trim() === 'S') {
-        console.log(`[FC debug MM] grade=${JSON.stringify(grade)} anchorD=${anchorD} anchorStock=${anchorStock} producedToDate=${producedToDate} adjustments=${adjustments} totalUsedBlocks=${totalUsedBlocks} transferMovement=${transferMovement} openBal=${openBal}`);
-        console.log(`[FC debug MM] unitTrans.length=${(unitTrans||[]).length} locMap=`, locMap);
-        const gradeCodes = Object.values(itemMap).filter(s => (s.x_grade||'').trim() === grade.trim() && s.x_cubic).map(s => s.stockcode);
-        console.log(`[FC debug MM] grade stockcodes=`, gradeCodes);
-        const matchingTrans = (unitTrans||[]).filter(t => Number(t.transtype)===2 && gradeCodes.includes((t.stockcode||'').trim()));
-        console.log(`[FC debug MM] matching transfers=`, matchingTrans);
-      }
-
-      // --- Forward walk through display window ---
-      // Walk day-by-day. For days BEFORE today (past display columns), we need the
-      // per-day balance. We recompute from anchorStock walking through all days in order.
-      // For past days: actual production + actual used (day-by-day).
-      // For today: production already counted in openBal; deduct required.
-      // For future: template production; deduct required.
-      const displayBals = [];
-      {
-        let bal = anchorD ? anchorStock : 0;
-        let passedAnchor = !anchorD || anchorD < days[0];
-
-        // If anchor is before window start, pre-walk to window start
-        if (anchorD && anchorD < days[0]) {
-          for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
-            if (dateStr >= days[0]) break;
-            const dow = (d.getDay() + 6) % 7;
-            if (dow > 4) continue;
-            const actual = getActualQty(grade, dateStr);
-            bal += actual !== null ? actual : getTemplateQty(grade, dateStr);
-            bal -= getUsed(grade, dateStr);
-          }
-          // Also add adjustments and transfers that fell in this pre-window period
-          // (already included in openBal which we use for today onward)
-        }
-
-        for (let i = 0; i < dayData.length; i++) {
-          const dd = dayData[i];
-          if (anchorD && dd.d === anchorD) { bal = anchorStock; passedAnchor = true; }
-          if (passedAnchor) {
-            if (dd.isPast) {
-              // Past day: add actual (or template) production, deduct used blocks
-              const actual = getActualQty(grade, dd.d);
-              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
-              bal -= getUsed(grade, dd.d);
-            } else if (dd.isToday) {
-              // Today: sync bal to openBal (already accounts for all past production/used/adj/transfers)
-              bal = openBal;
-              bal -= dd.required;
-            } else {
-              // Future day: add template production, deduct required
-              const actual = getActualQty(grade, dd.d);
-              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
-              bal -= dd.required;
-            }
-          }
-          displayBals.push(passedAnchor ? bal : null);
-        }
-      }
-
-      // Stock pill shows start-of-day balance for today (openBal = before today's req)
-      const stockCls = !anchorD ? '' : openBal <= minLevel ? 'critical' : openBal <= minLevel * 1.5 ? 'low' : '';
-      const stockLabel = anchorD ? `Stock: ${Math.round(openBal)} blk` : 'Stock: —';
-
-      const todayBal = displayBals[dayData.findIndex(d => d.isToday)] ?? null;
-
-      // Grade colour
-      const gcls = gradeColorClass(grade);
-      const gcv  = gcls ? `var(--gc-${gcls})` : 'var(--accent)';
-
-      // Build column headers
-      const todayIdx = dayData.findIndex(d => d.isToday);
-      let colHtml = '<tr>';
-      colHtml += '<th class="th-grade" style="min-width:52px">Grade</th>';
-      dayData.forEach((dd, i) => {
-        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
-        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
-        colHtml += `<th class="${cls}" style="min-width:28px;${sep}">
-          <div class="fc-day-head">${dd.label}</div>
-          <div class="fc-day-sub">${dd.dateStr}</div>
-        </th>`;
-      });
-      colHtml += '</tr>';
-
-      // Production row
-      let prodHtml = '<tr>';
-      prodHtml += `<td class="td-label">Produced</td>`;
-      dayData.forEach((dd, i) => {
-        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
-        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
-        const val = dd.produced > 0 ? `<span class="fc-val-prod">${dd.produced}</span>` : '—';
-        prodHtml += `<td class="${cls}" style="${sep}">${val}</td>`;
-      });
-      prodHtml += '</tr>';
-
-      // Required row (future only — blocks needed from outstanding sales orders)
-      let tmplHtml = '<tr>';
-      tmplHtml += `<td class="td-label">Req / Used</td>`;
-      dayData.forEach((dd, i) => {
-        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
-        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
-        let val = '—';
-        if (dd.isPast) {
-          const used = getUsed(grade, dd.d);
-          if (used > 0.5) val = `<span class="fc-val-tmpl">${Math.round(used)}</span>`;
-        } else if (dd.required > 0.5) {
-          val = `<span class="fc-val-tmpl">${Math.round(dd.required)}</span>`;
-        }
-        tmplHtml += `<td class="${cls}" style="${sep}">${val}</td>`;
-      });
-      tmplHtml += '</tr>';
-
-      // Running balance row
-      let balHtml = '<tr>';
-      balHtml += `<td class="td-label" style="font-weight:600;color:var(--fg)">Est. Stock</td>`;
-      displayBals.forEach((bal, i) => {
-        const dd = dayData[i];
-        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
-        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
-        if (bal === null) { balHtml += `<td class="${cls}" style="${sep}">—</td>`; return; }
-        const bRnd = Math.round(bal);
-        const bCls = bRnd <= minLevel ? 'fc-val-bal critical' : bRnd <= minLevel * 1.5 ? 'fc-val-bal low' : 'fc-val-bal ok';
-        balHtml += `<td class="${cls}" style="${sep}"><span class="${bCls}">${bRnd}</span></td>`;
-      });
-      balHtml += '</tr>';
-
-      html += `<div class="fc-grade-block">
-        <div class="fc-grade-head">
-          <span class="fc-grade-name" style="color:${gcv}">${grade}</span>
-          <span class="fc-stock-pill ${stockCls}">${stockLabel}</span>
-          ${minLevel > 0 ? `<span style="font-size:11px;color:var(--muted)">min ${minLevel} blk</span>` : ''}
-        </div>
-        <div class="fc-tbl-wrap">
-          <table class="fc-tbl">
-            <thead>${colHtml}</thead>
-            <tbody>
-              ${prodHtml}
-              ${tmplHtml}
-              ${balHtml}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-    }
-
-    el.innerHTML = html
-      ? `<div class="fc-tile-grid">${html}</div>`
-      : '<div class="empty">No grades found.</div>';
-  } catch(e) {
-    document.getElementById('fc-content').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
   }
 }
 
