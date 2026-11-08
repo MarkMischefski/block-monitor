@@ -287,6 +287,61 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 .stat-bar-fill.current { opacity: 1; }
 .stat-bar-lbl { font-size: 8px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* ── forecast tile grid ── */
+.fc-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.fc-grade-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+.fc-grade-head {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.fc-grade-name { font-family: var(--ff-head); font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+.fc-stock-pill {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+  background: rgba(0,133,255,.1); color: var(--accent);
+}
+.fc-stock-pill.low { background: rgba(232,146,10,.12); color: var(--warn); }
+.fc-stock-pill.critical { background: rgba(220,38,38,.12); color: var(--danger); }
+.fc-tbl-wrap { overflow-x: auto; }
+.fc-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.fc-tbl th {
+  text-align: center; padding: 4px 3px;
+  font-size: 9px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); background: var(--bg);
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.fc-tbl th.th-grade { text-align: left; }
+.fc-tbl td {
+  padding: 4px 4px; text-align: center;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.fc-tbl td.td-label { text-align: left; font-size: 11px; color: var(--muted); padding-left: 4px; white-space: nowrap; }
+.fc-tbl tr:last-child td { border-bottom: none; }
+.fc-col-today { background: rgba(0,133,255,.04); }
+.fc-col-past  { opacity: .65; }
+.fc-val-prod  { color: var(--good); font-weight: 600; }
+.fc-val-tmpl  { color: var(--accent); font-weight: 600; }
+.fc-val-req   { color: var(--fg); }
+.fc-val-bal   { font-weight: 700; }
+.fc-val-bal.ok       { color: var(--good); }
+.fc-val-bal.low      { color: var(--warn); }
+.fc-val-bal.critical { color: var(--danger); }
+.fc-day-head  { font-size: 10px; font-weight: 600; }
+.fc-day-sub   { font-size: 9px; color: var(--muted); }
+
 /* ── spinner / empty ── */
 .spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -324,6 +379,7 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
 <!-- TABS -->
 <div id="tab-bar">
   <button class="tab active" data-tab="dashboard">Production</button>
+  <button class="tab" data-tab="forecast">Forecast</button>
   <button class="tab" data-tab="mapping">Grade Mapping</button>
 </div>
 
@@ -407,6 +463,18 @@ tr.row-low  td { background: rgba(232,146,10,.04); }
   </main>
 </div>
 
+<!-- ═══════════════════════════ FORECAST PAGE ════════════════════════════════ -->
+<div id="forecast-page" class="page">
+  <div id="fc-wrap" style="padding:16px 20px 40px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <h2 style="font-family:var(--ff-head);font-size:16px;font-weight:700;letter-spacing:.02em;flex:1">Canterbury Block Forecast</h2>
+      <span style="font-size:11px;color:var(--muted)">Branches 4 &amp; 8 · last 3 days + next 8</span>
+      <button class="btn btn-ghost btn-sm" id="btn-fc-refresh">↻ Refresh</button>
+    </div>
+    <div id="fc-content"><div class="loading-cell"><div class="spinner"></div></div></div>
+  </div>
+</div>
+
 <!-- ═════════════════════════ GRADE MAPPING PAGE ════════════════════════════ -->
 <div id="mapping-page" class="page">
   <div id="map-page">
@@ -468,6 +536,7 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   t.classList.add('active');
   document.getElementById(t.dataset.tab + '-page').classList.add('active');
   if (t.dataset.tab === 'mapping' && SB_URL) loadMapping();
+  if (t.dataset.tab === 'forecast' && SB_URL) loadForecast();
 }));
 document.getElementById('btn-map-refresh').addEventListener('click', loadMapping);
 
@@ -504,6 +573,31 @@ async function sbFetch(path, params = {}) {
   const r = await fetch(url, { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json' } });
   if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return r.json();
+}
+
+// Paginated fetch — use for large tables (sales lines, stock items)
+async function sbFetchAll(path, params = {}, pageSize = 1000) {
+  const all = [];
+  let from = 0;
+  while (true) {
+    const url = new URL(`${SB_URL}/rest/v1/${path}`);
+    for (const [k, v] of Object.entries(params)) {
+      if (Array.isArray(v)) v.forEach(vi => url.searchParams.append(k, vi));
+      else url.searchParams.set(k, v);
+    }
+    const r = await fetch(url, {
+      headers: {
+        apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Accept: 'application/json',
+        'Range': `${from}-${from + pageSize - 1}`, 'Range-Unit': 'items', 'Prefer': 'count=none'
+      }
+    });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0, 200)}`);
+    const page = await r.json();
+    all.push(...page);
+    if (page.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
 }
 
 async function sbPatch(path, id, body) {
@@ -1159,7 +1253,10 @@ async function saveMapping(id) {
   const recipesRaw = document.getElementById(`mr-${id}`).value;
   const targetRaw  = document.getElementById(`mt-${id}`).value;
   const tolRaw     = document.getElementById(`ml-${id}`).value;
-  const notes      = document.getElementById(`mn-${id}`).value;
+  const notesEl    = document.getElementById(`mn-${id}`);
+  const notes      = notesEl ? notesEl.value : null;
+  const ignoreEl   = document.getElementById(`mi-${id}`);
+  const ignoreLabelAs = ignoreEl ? ignoreEl.checked : false;
   const status     = document.getElementById(`ms-${id}`);
 
   const recipes = recipesRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -1167,7 +1264,7 @@ async function saveMapping(id) {
   const tol     = tolRaw    !== '' ? parseFloat(tolRaw)    : 1.0;
 
   try {
-    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, notes: notes || null });
+    await sbPatch('recipe_grade_map', id, { recipes, target_density: target, density_tolerance: tol, ignore_label_as: ignoreLabelAs, notes: notes || null });
     status.textContent = '✓ Saved';
     status.className = 'map-status saved';
     // Refresh grade map cache
@@ -1176,6 +1273,406 @@ async function saveMapping(id) {
   } catch (e) {
     status.textContent = '✗ ' + e.message.slice(0, 60);
     status.className = 'map-status error';
+  }
+}
+
+// ── forecast ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-fc-refresh').addEventListener('click', loadForecast);
+
+// Canterbury branch numbers
+const FC_BRANCHES = [4, 8];
+
+function fcDateRange() {
+  // Returns array of working-day date strings: 3 prior working days + today + 8 future working days
+  // Weekends are excluded entirely
+  const today = todayNZ();
+  const days = [];
+  // Past: walk back to find 3 working days
+  const pastDays = [];
+  const cur = new Date(today + 'T12:00:00Z');
+  for (let i = 0; i < 30 && pastDays.length < 3; i++) {
+    cur.setUTCDate(cur.getUTCDate() - 1);
+    const dow = cur.getUTCDay();
+    if (dow !== 0 && dow !== 6) pastDays.unshift(cur.toISOString().slice(0, 10));
+  }
+  days.push(...pastDays);
+  days.push(today);
+  // Future: 8 working days from tomorrow
+  const fut = new Date(today + 'T12:00:00Z');
+  let futCount = 0;
+  for (let i = 0; i < 30 && futCount < 8; i++) {
+    fut.setUTCDate(fut.getUTCDate() + 1);
+    const dow = fut.getUTCDay();
+    if (dow !== 0 && dow !== 6) {
+      days.push(fut.toISOString().slice(0, 10));
+      futCount++;
+    }
+  }
+  return { days, today };
+}
+
+function fcDayLabel(d, today) {
+  const dt = new Date(d + 'T12:00:00Z');
+  const dow = dt.getUTCDay();
+  const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dateStr = dt.toLocaleDateString('en-NZ', { timeZone: 'UTC', day: 'numeric', month: 'short' });
+  const label = d === today ? 'Today' : dayNames[dow];
+  return { label, dateStr, isWeekend: dow === 0 || dow === 6, isPast: d < today, isToday: d === today };
+}
+
+async function loadForecast() {
+  const el = document.getElementById('fc-content');
+  el.innerHTML = '<div class="loading-cell"><div class="spinner"></div></div>';
+  try {
+    const { days, today } = fcDateRange();
+    const startDate = days[0];
+    const endDate   = days[days.length - 1];
+
+    const [stockEntries, production, autoSettings, machines, salesLines, stockItems, scheduleRows, appSettingsRows, prodTemplate, blockAdj, branchLocs, unitTrans] = await Promise.all([
+      sbFetch('block_stock_entries',    { select: 'branch_no,grade,entry_date,entry_timestamp,qty', branch_no: 'in.(4,8)', order: 'entry_date.desc' }),
+      sbFetch('block_production',       { select: 'branch_no,grade,production_date,qty', branch_no: 'in.(4,8)', production_date: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
+      sbFetch('block_auto_forecast',    { select: 'branch_no,block_grade,min_level', branch_no: 'in.(4,8)' }),
+      sbFetch('capacity_machines',      { select: 'seqno,branchno,block_moulder' }),
+      sbFetchAll('capacity_sales_lines',   { select: 'solineid,stockcode,ord_quant,sup_quant', order: 'solineid.asc' }),
+      sbFetchAll('capacity_stock_items',   { select: 'stockcode,x_grade,x_cubic', order: 'stockcode.asc' }),
+      sbFetchAll('capacity_schedule',      { select: 'machineno,line_seqno,startdate,iscomplete,completeqty,completime,finishdate', iscomplete: 'in.(0,1,2,4)', order: 'startdate.asc' }),
+      sbFetch('capacity_app_settings',  { select: 'settings', id: 'eq.1' }),
+      sbFetch('block_production_template', { select: 'branch_no,grade,day_of_week,qty', branch_no: 'in.(4,8)' }),
+      sbFetch('block_adjustments',         { select: 'branch_no,grade,adjustment_date,qty', branch_no: 'in.(4,8)' }),
+      sbFetch('capacity_branch_locations', { select: 'branch_no,location_no' }),
+      sbFetchAll('unit_stock_trans',        { select: 'transtype,stockcode,location,quantity,posttime,transdate', transtype: 'eq.2', transdate: `gte.${(() => { const d = new Date(today); d.setDate(d.getDate() - 90); return d.toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'}); })()}` }),
+    ]);
+
+    const branchSettings = {};
+    let excludedGrades = new Set();
+    if (appSettingsRows.length) {
+      let shared = appSettingsRows[0].settings || {};
+      if (typeof shared === 'string') { try { shared = JSON.parse(shared); } catch(e) { shared = {}; } }
+      const bm = shared.branchMaterial || {};
+      for (const [bn, mat] of Object.entries(bm)) {
+        branchSettings[Number(bn)] = { blockM3: parseFloat(mat.blockM3) || 0, wastePct: parseFloat(mat.wastePct) || 0 };
+      }
+      excludedGrades = new Set(shared.excludedGrades || []);
+    }
+
+    const itemMap = {};
+    for (const si of stockItems) {
+      if (si.stockcode) itemMap[si.stockcode] = { x_grade: si.x_grade || '', x_cubic: parseFloat(si.x_cubic) || 0 };
+    }
+
+    const reqByGradeDate = {};
+    const mMap  = Object.fromEntries(machines.map(m => [Number(m.seqno), m]));
+    const slMap = Object.fromEntries(salesLines.map(l => [Number(l.solineid), l]));
+
+    for (const bn of FC_BRANCHES) {
+      const mat      = branchSettings[bn] || {};
+      const blockM3  = parseFloat(mat.blockM3)  || 0;
+      const wasteFac = 1 - ((parseFloat(mat.wastePct) || 0) / 100);
+      if (blockM3 <= 0 || wasteFac <= 0) continue;
+      const bnMachines = new Set(machines.filter(m => Number(m.branchno) === bn && m.block_moulder !== false).map(m => Number(m.seqno)));
+      const bnJobs = scheduleRows.filter(j => bnMachines.has(Number(j.machineno)) && (Number(j.iscomplete) === 0 || Number(j.iscomplete) === 4));
+      for (const j of bnJobs) {
+        const sl = slMap[Number(j.line_seqno)]; if (!sl) continue;
+        const st = itemMap[sl.stockcode]; if (!st || !st.x_grade || st.x_cubic <= 0) continue;
+        const grade = st.x_grade.trim();
+        const outstanding = Number(j.iscomplete) === 4
+          ? Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(j.completeqty) || 0))
+          : Math.max(0, (parseFloat(sl.ord_quant) || 0) - (parseFloat(sl.sup_quant)  || 0));
+        if (outstanding <= 0) continue;
+        const jobCubic = st.x_cubic * outstanding;
+        const jobDate = (j.startdate || '').slice(0, 10);
+        const effectiveDate = jobDate <= today ? today : (days.includes(jobDate) ? jobDate : null);
+        if (!effectiveDate) continue;
+        const blocks = jobCubic / (blockM3 * wasteFac);
+        if (!reqByGradeDate[grade]) reqByGradeDate[grade] = {};
+        reqByGradeDate[grade][effectiveDate] = (reqByGradeDate[grade][effectiveDate] || 0) + blocks;
+      }
+    }
+
+    function getRequired(grade, date) { return (reqByGradeDate[grade] || {})[date] || 0; }
+
+    const usedByGradeDate = {};
+    for (const bn of FC_BRANCHES) {
+      const mat = branchSettings[bn] || {};
+      const blockM3  = mat.blockM3  || 0;
+      const wasteFac = 1 - ((mat.wastePct || 0) / 100);
+      if (blockM3 === 0 || wasteFac <= 0) continue;
+      scheduleRows.filter(j => Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2).forEach(j => {
+        const m = mMap[Number(j.machineno)];
+        if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
+        const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
+        const item = itemMap[sl.stockcode];
+        if (!item || !item.x_grade || item.x_cubic <= 0) return;
+        const grade = item.x_grade.trim();
+        const completeDateStr = j.completime
+          ? new Date(j.completime.replace(' ','T').replace(/\+00$/,'+00:00')).toLocaleDateString('en-CA', {timeZone:'Pacific/Auckland'})
+          : (j.finishdate || '').slice(0,10);
+        if (!completeDateStr) return;
+        const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
+          ? parseFloat(sl.sup_quant) : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+        const blocks = (item.x_cubic * Math.max(0, doneQty)) / (blockM3 * wasteFac);
+        if (!usedByGradeDate[grade]) usedByGradeDate[grade] = {};
+        usedByGradeDate[grade][completeDateStr] = (usedByGradeDate[grade][completeDateStr] || 0) + blocks;
+      });
+    }
+
+    function getUsed(grade, date) { return (usedByGradeDate[grade] || {})[date] || 0; }
+
+    const gradeSet = new Set();
+    [...stockEntries, ...production].forEach(r => { if (r.grade) gradeSet.add(r.grade); });
+    autoSettings.forEach(r => { if (r.block_grade) gradeSet.add(r.block_grade); });
+    Object.keys(reqByGradeDate).forEach(g => gradeSet.add(g));
+    const fcGrades = [...gradeSet].filter(g => !excludedGrades.has(g)).sort();
+
+    if (!fcGrades.length) {
+      el.innerHTML = '<div class="empty">No block stock data found for Canterbury (branches 4 &amp; 8).</div>';
+      return;
+    }
+
+    function getOpeningStock(bn, grade, beforeDate) {
+      const entries = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date <= beforeDate)
+        .sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+      return entries.length ? +entries[0].qty : null;
+    }
+
+    function getActual(bn, grade, date) {
+      const p = production.find(p => Number(p.branch_no) === bn && p.grade === grade && p.production_date === date);
+      return p ? +p.qty : null;
+    }
+
+    function getMinLevel(bn, grade) {
+      const r = autoSettings.find(r => Number(r.branch_no) === bn && r.block_grade === grade);
+      return r ? (+r.min_level || 0) : 0;
+    }
+
+    function completedBlocksUsedSince(grade, anchorDateStr, anchorTimestampStr) {
+      const anchorMs = anchorTimestampStr
+        ? new Date(anchorTimestampStr.replace(' ','T').replace(/\+00$/,'+00:00')).getTime() : null;
+      let totalUsedBlocks = 0;
+      for (const bn of FC_BRANCHES) {
+        const mat = branchSettings[bn] || {};
+        const blockM3  = mat.blockM3  || 0;
+        const wasteFac = 1 - ((mat.wastePct || 0) / 100);
+        if (blockM3 === 0 || wasteFac <= 0) continue;
+        let usedCubic = 0;
+        scheduleRows.filter(j => (Number(j.iscomplete) === 1 || Number(j.iscomplete) === 2)).forEach(j => {
+          const m = mMap[Number(j.machineno)];
+          if (!m || Number(m.branchno) !== bn || m.block_moulder === false) return;
+          const sl = slMap[Number(j.line_seqno)]; if (!sl) return;
+          const item = itemMap[sl.stockcode];
+          if (!item || (item.x_grade||'').trim() !== grade || !item.x_cubic) return;
+          if (j.completime) {
+            const cts = j.completime.replace(' ','T').replace(/\+00$/,'+00:00');
+            const ctMs = new Date(cts).getTime();
+            if (!isNaN(ctMs)) {
+              if (anchorMs != null ? ctMs <= anchorMs : j.completime.slice(0,10) < anchorDateStr) return;
+            }
+          } else { if ((j.finishdate || '') < anchorDateStr) return; }
+          const doneQty = Number(j.iscomplete) === 2 && parseFloat(sl.sup_quant) > 0
+            ? parseFloat(sl.sup_quant) : parseFloat(j.completeqty) || parseFloat(sl.ord_quant) || 0;
+          usedCubic += item.x_cubic * Math.max(0, doneQty);
+        });
+        totalUsedBlocks += usedCubic / (blockM3 * wasteFac);
+      }
+      return totalUsedBlocks;
+    }
+
+    const prodGD = {};
+    for (const p of production) {
+      if (!FC_BRANCHES.includes(Number(p.branch_no))) continue;
+      const g = p.grade; const d = p.production_date;
+      if (!prodGD[g]) prodGD[g] = {};
+      prodGD[g][d] = (prodGD[g][d] || 0) + (p.qty || 0);
+    }
+
+    const getTemplateQty = (grade, dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      const dow = (d.getDay() + 6) % 7;
+      let qty = 0;
+      for (const bn of FC_BRANCHES) {
+        const t = prodTemplate.find(t => Number(t.branch_no) === bn && t.grade === grade && t.day_of_week === dow);
+        if (t) qty += (t.qty || 0);
+      }
+      return qty;
+    };
+
+    const getActualQty = (grade, dateStr) => {
+      const pMap = prodGD[grade];
+      if (!pMap || !(dateStr in pMap)) return null;
+      return pMap[dateStr];
+    };
+
+    const locMap = Object.fromEntries((branchLocs || []).map(r => [Number(r.branch_no), Number(r.location_no)]));
+
+    let html = '';
+    for (const grade of fcGrades) {
+      let minLevel = 0;
+      for (const bn of FC_BRANCHES) minLevel = Math.max(minLevel, getMinLevel(bn, grade));
+
+      const dayData = [];
+      for (const d of days) {
+        const { label, dateStr, isWeekend, isPast, isToday } = fcDayLabel(d, today);
+        let produced = 0;
+        for (const bn of FC_BRANCHES) { const actual = getActual(bn, grade, d); if (actual !== null) produced += actual; }
+        const required = (!isPast) ? getRequired(grade, d) : 0;
+        dayData.push({ d, label, dateStr, isWeekend, isPast, isToday, produced, required });
+      }
+
+      const anchorDate = (() => {
+        const allEntries = FC_BRANCHES.flatMap(bn =>
+          stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade)
+        ).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
+        return allEntries[0] || null;
+      })();
+
+      let anchorD = null, anchorTimestamp = null, anchorStock = 0;
+      if (anchorDate) {
+        anchorD = anchorDate.entry_date;
+        anchorTimestamp = anchorDate.entry_timestamp || null;
+        for (const bn of FC_BRANCHES) {
+          const e = stockEntries.filter(e => Number(e.branch_no) === bn && e.grade === grade && e.entry_date === anchorD)
+            .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0];
+          if (e) anchorStock += +e.qty;
+        }
+      }
+
+      const adjustments = !anchorD ? 0 : (blockAdj || [])
+        .filter(a => FC_BRANCHES.includes(+a.branch_no) && a.grade === grade && a.adjustment_date >= anchorD)
+        .reduce((s, a) => s + (a.qty || 0), 0);
+
+      let transferMovement = 0;
+      if (anchorD && unitTrans && unitTrans.length > 0) {
+        const gradeCubicMap = {};
+        Object.entries(itemMap).forEach(([sc, s]) => { if ((s.x_grade || '').trim() === grade && s.x_cubic) gradeCubicMap[sc] = parseFloat(s.x_cubic); });
+        const gradeStockCodes = new Set(Object.keys(gradeCubicMap));
+        for (const bn of FC_BRANCHES) {
+          const locNo = locMap[bn]; if (locNo == null) continue;
+          const { blockM3 = 0, wastePct = 0 } = branchSettings[bn] || {};
+          const wf = 1 - wastePct / 100;
+          if (!blockM3 || wf <= 0) continue;
+          (unitTrans || []).filter(t => Number(t.transtype) === 2 && gradeStockCodes.has((t.stockcode || '').trim())).forEach(t => {
+            if (Number(t.location) !== locNo) return;
+            if (t.posttime) {
+              const ts = t.posttime.replace(' ', 'T');
+              if (anchorTimestamp ? ts <= anchorTimestamp : new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }) < anchorD) return;
+            } else if ((t.transdate || '') < anchorD) return;
+            const qty = parseFloat(t.quantity) || 0;
+            const xCubic = gradeCubicMap[(t.stockcode || '').trim()]; if (!xCubic) return;
+            const blocks = xCubic * Math.abs(qty) / (blockM3 * wf);
+            transferMovement += qty > 0 ? blocks : -blocks;
+          });
+        }
+      }
+
+      const totalUsedBlocks = anchorD ? completedBlocksUsedSince(grade, anchorD, anchorTimestamp) : 0;
+
+      let producedToDate = 0;
+      if (anchorD) {
+        for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+          if (dateStr > today) break;
+          const dow = (d.getDay() + 6) % 7;
+          if (dow > 4) continue;
+          const actual = getActualQty(grade, dateStr);
+          if (actual !== null) producedToDate += actual;
+          else if (dateStr !== today) producedToDate += getTemplateQty(grade, dateStr);
+        }
+      }
+
+      const openBal = anchorD ? anchorStock + producedToDate + adjustments - totalUsedBlocks + transferMovement : 0;
+
+      const displayBals = [];
+      {
+        let bal = anchorD ? anchorStock : 0;
+        let passedAnchor = !anchorD || anchorD < days[0];
+        if (anchorD && anchorD < days[0]) {
+          for (let d = new Date(anchorD + 'T00:00:00'); ; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+            if (dateStr >= days[0]) break;
+            const dow = (d.getDay() + 6) % 7; if (dow > 4) continue;
+            const actual = getActualQty(grade, dateStr);
+            bal += actual !== null ? actual : getTemplateQty(grade, dateStr);
+            bal -= getUsed(grade, dateStr);
+          }
+        }
+        for (let i = 0; i < dayData.length; i++) {
+          const dd = dayData[i];
+          if (anchorD && dd.d === anchorD) { bal = anchorStock; passedAnchor = true; }
+          if (passedAnchor) {
+            if (dd.isPast) {
+              const actual = getActualQty(grade, dd.d);
+              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
+              bal -= getUsed(grade, dd.d);
+            } else if (dd.isToday) {
+              bal = openBal; bal -= dd.required;
+            } else {
+              const actual = getActualQty(grade, dd.d);
+              bal += actual !== null ? actual : (!dd.isWeekend ? getTemplateQty(grade, dd.d) : 0);
+              bal -= dd.required;
+            }
+          }
+          displayBals.push(passedAnchor ? bal : null);
+        }
+      }
+
+      const stockCls = !anchorD ? '' : openBal <= minLevel ? 'critical' : openBal <= minLevel * 1.5 ? 'low' : '';
+      const stockLabel = anchorD ? 'Stock: ' + Math.round(openBal) + ' blk' : 'Stock: —';
+      const todayIdx = dayData.findIndex(d => d.isToday);
+      const gcls = gradeColorClass(grade);
+      const gcv  = gcls ? 'var(--gc-' + gcls + ')' : 'var(--accent)';
+
+      let colHtml = '<tr><th class="th-grade" style="min-width:52px">Grade</th>';
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        colHtml += '<th class="' + cls + '" style="min-width:28px;' + sep + '"><div class="fc-day-head">' + dd.label + '</div><div class="fc-day-sub">' + dd.dateStr + '</div></th>';
+      });
+      colHtml += '</tr>';
+
+      let prodHtml = '<tr><td class="td-label">Produced</td>';
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        const val = dd.produced > 0 ? '<span class="fc-val-prod">' + dd.produced + '</span>' : '—';
+        prodHtml += '<td class="' + cls + '" style="' + sep + '">' + val + '</td>';
+      });
+      prodHtml += '</tr>';
+
+      let tmplHtml = '<tr><td class="td-label">Req / Used</td>';
+      dayData.forEach((dd, i) => {
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        let val = '—';
+        if (dd.isPast) { const used = getUsed(grade, dd.d); if (used > 0.5) val = '<span class="fc-val-tmpl">' + Math.round(used) + '</span>'; }
+        else if (dd.required > 0.5) val = '<span class="fc-val-tmpl">' + Math.round(dd.required) + '</span>';
+        tmplHtml += '<td class="' + cls + '" style="' + sep + '">' + val + '</td>';
+      });
+      tmplHtml += '</tr>';
+
+      let balHtml = '<tr><td class="td-label" style="font-weight:600;color:var(--fg)">Est. Stock</td>';
+      displayBals.forEach((bal, i) => {
+        const dd = dayData[i];
+        const cls = dd.isToday ? 'fc-col-today' : dd.isPast ? 'fc-col-past' : '';
+        const sep = i === todayIdx ? 'border-left:2px solid var(--accent)' : '';
+        if (bal === null) { balHtml += '<td class="' + cls + '" style="' + sep + '">—</td>'; return; }
+        const bRnd = Math.round(bal);
+        const bCls = bRnd <= minLevel ? 'fc-val-bal critical' : bRnd <= minLevel * 1.5 ? 'fc-val-bal low' : 'fc-val-bal ok';
+        balHtml += '<td class="' + cls + '" style="' + sep + '"><span class="' + bCls + '">' + bRnd + '</span></td>';
+      });
+      balHtml += '</tr>';
+
+      html += '<div class="fc-grade-block"><div class="fc-grade-head">'
+        + '<span class="fc-grade-name" style="color:' + gcv + '">' + grade + '</span>'
+        + '<span class="fc-stock-pill ' + stockCls + '">' + stockLabel + '</span>'
+        + (minLevel > 0 ? '<span style="font-size:11px;color:var(--muted)">min ' + minLevel + ' blk</span>' : '')
+        + '</div><div class="fc-tbl-wrap"><table class="fc-tbl"><thead>' + colHtml + '</thead><tbody>'
+        + prodHtml + tmplHtml + balHtml
+        + '</tbody></table></div></div>';
+    }
+
+    el.innerHTML = html ? '<div class="fc-tile-grid">' + html + '</div>' : '<div class="empty">No grades found.</div>';
+  } catch(e) {
+    document.getElementById('fc-content').innerHTML = '<div class="empty">Error: ' + e.message + '</div>';
   }
 }
 
